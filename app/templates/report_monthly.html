@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Monthly report{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Monthly report</h1><div class="muted">{{ month_label }}</div></div>
+  <div class="actions no-print">
+    <a class="btn" href="{{ url_for('main.report_monthly', month=month, department=dept or '', export='muster') }}">Muster roll CSV</a>
+    <a class="btn" href="{{ url_for('main.report_monthly', month=month, department=dept or '', export='summary') }}">Summary CSV</a>
+    <a class="btn" href="{{ url_for('main.report_monthly', month=month, department=dept or '', export='detail') }}">Daily detail CSV</a>
+    <button class="btn" onclick="window.print()">Print</button>
+  </div>
+</div>
+<div class="card">
+  <form class="filters" method="get">
+    <label>Month<input type="month" name="month" value="{{ month }}"></label>
+    <label>Department<select name="department"><option value="">All</option>
+      {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if d.id == dept }}>{{ d.name }}</option>{% endfor %}</select></label>
+    <label>View<select name="view">
+      <option value="muster" {{ 'selected' if view == 'muster' }}>Muster roll</option>
+      <option value="summary" {{ 'selected' if view == 'summary' }}>Summary</option></select></label>
+    <button class="btn" type="submit">Show</button>
+  </form>
+</div>
+<div class="card">
+  <div class="table-wrap">
+  {% if view == 'summary' %}
+  <table>
+    <thead><tr><th>No.</th><th>Name</th><th>Department</th><th class="num">Present</th><th class="num">Absent</th><th class="num">Half day</th>
+      <th class="num">Missing punch</th><th class="num">Leave</th><th class="num">Holiday</th><th class="num">Weekly off</th>
+      <th class="num">Late</th><th class="num">Early exit</th><th class="num">Work hrs</th><th class="num">OT hrs</th><th class="num">Payable</th></tr></thead>
+    <tbody>
+    {% for e, days_, s in rows %}
+      <tr><td>{{ e.employee_no }}</td><td><a href="{{ url_for('main.employee_detail', emp_id=e.id, month=month) }}">{{ e.name }}</a></td><td>{{ e.department or '' }}</td>
+        <td class="num">{{ s.present }}</td><td class="num">{{ s.absent }}</td><td class="num">{{ s.half_day }}</td><td class="num">{{ s.missing_punch }}</td>
+        <td class="num">{{ s.leave }}</td><td class="num">{{ s.holiday }}</td><td class="num">{{ s.weekly_off }}</td>
+        <td class="num">{{ s.late }}</td><td class="num">{{ s.early }}</td><td class="num">{{ s.work_minutes|hm }}</td><td class="num">{{ s.ot_minutes|hm }}</td>
+        <td class="num"><b>{{ s.payable }}</b></td></tr>
+    {% else %}<tr><td colspan="15" class="muted">No employees.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <table class="muster">
+    <thead>
+      <tr><th class="name">Employee</th>
+        {% for d in days %}<th class="{{ 'we' if d.weekday() == 6 }}">{{ d.day }}<br><span class="small">{{ weekdays[d.weekday()][:2] }}</span></th>{% endfor %}
+        <th>P</th><th>A</th><th>L</th><th>Late</th><th>Pay</th></tr>
+    </thead>
+    <tbody>
+    {% for e, ds, s in rows %}
+      <tr><td class="name"><a href="{{ url_for('main.employee_detail', emp_id=e.id, month=month) }}">{{ e.name }}</a><div class="muted small">#{{ e.employee_no }}</div></td>
+        {% for d in ds %}<td>{% if d.status != '-' %}<span class="badge s-{{ d.status }}" title="{{ d.label }}{% if d.first_in %} {{ d.first_in.strftime('%H:%M') }}{% endif %}{% if d.last_out %}–{{ d.last_out.strftime('%H:%M') }}{% endif %}{% if d.late_minutes %} late {{ d.late_minutes }}m{% endif %}">{{ d.status }}</span>{% if d.late_minutes %}<div class="late small">late</div>{% endif %}{% endif %}</td>{% endfor %}
+        <td><b>{{ s.present }}</b></td><td>{{ s.absent }}</td><td>{{ s.leave }}</td><td>{{ s.late }}</td><td><b>{{ s.payable }}</b></td></tr>
+    {% else %}<tr><td colspan="40" class="muted">No employees.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  </div>
+  <p class="muted small"><span class="late">late</span> marks a late arrival. Payable = present (half days count 0.5) + leave + holidays + weekly offs. Missing punch days count as present — correct them by adding a manual punch.</p>
+</div>
+{% endblock %}

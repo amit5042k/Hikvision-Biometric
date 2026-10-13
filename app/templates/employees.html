@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Employees{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Employees</h1><div class="muted">{{ employees|length }} shown</div></div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('main.employees_export') }}">Export CSV</a>
+    {% if user.role == 'admin' %}<a class="btn primary" href="{{ url_for('main.employee_form') }}">+ Add employee</a>{% endif %}
+  </div>
+</div>
+<div class="card">
+  <form class="filters" method="get">
+    <label>Search<input name="q" value="{{ q }}" placeholder="Name, number or card"></label>
+    <label>Department<select name="department"><option value="">All</option>
+      {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if d.id == dept }}>{{ d.name }}</option>{% endfor %}</select></label>
+    <label>Status<select name="status">
+      {% for v, l in [('active','Active'),('inactive','Inactive'),('all','All')] %}<option value="{{ v }}" {{ 'selected' if v == status }}>{{ l }}</option>{% endfor %}</select></label>
+    <button class="btn" type="submit">Filter</button>
+  </form>
+</div>
+<form method="post" action="{{ url_for('main.bulk_shift') }}">
+{{ csrf() }}
+<div class="card">
+  <div class="table-wrap">
+  <table>
+    <thead><tr>{% if user.role == 'admin' %}<th><input type="checkbox" onclick="document.querySelectorAll('.pick').forEach(c => c.checked = this.checked)"></th>{% endif %}
+      <th>No.</th><th>Name</th><th>Department</th><th>Designation</th><th>Shift</th><th>Card</th><th>Face</th><th></th></tr></thead>
+    <tbody>
+    {% for e in employees %}
+      <tr>
+        {% if user.role == 'admin' %}<td><input type="checkbox" class="pick" name="employee_id" value="{{ e.id }}"></td>{% endif %}
+        <td>{{ e.employee_no }}</td>
+        <td><a href="{{ url_for('main.employee_detail', emp_id=e.id) }}">{{ e.name }}</a>{% if not e.active %} <span class="badge">inactive</span>{% endif %}</td>
+        <td>{{ e.department or '—' }}</td><td>{{ e.designation or '' }}</td><td>{{ e.shift_name or '—' }}</td>
+        <td>{{ e.card_no or '' }}</td><td>{{ '✔' if e.has_face else '' }}</td>
+        <td>{% if user.role == 'admin' %}<a class="btn sm" href="{{ url_for('main.employee_form', emp_id=e.id) }}">Edit</a>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="9" class="muted">No employees. Add them here, import a CSV, or use “Import users” on the Devices page.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if user.role == 'admin' and employees %}
+  <div class="filters" style="margin-top:14px">
+    <label>Set shift for selected<select name="shift_id"><option value="">—</option>{% for s in shifts %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select></label>
+    <label>Set department<select name="department_id"><option value="">—</option>{% for d in departments %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select></label>
+    <button class="btn" type="submit">Apply to selected</button>
+  </div>
+  {% endif %}
+</div>
+</form>
+{% if user.role == 'admin' %}
+<div class="card">
+  <h2>Import employees from CSV</h2>
+  <p class="muted small">Columns: <code>employee_no,name</code> and optionally <code>department,designation,card_no,phone,email,join_date</code> (YYYY-MM-DD). Existing employee numbers are updated.</p>
+  <form method="post" action="{{ url_for('main.employees_import_csv') }}" enctype="multipart/form-data" class="filters">
+    {{ csrf() }}<input type="file" name="file" accept=".csv" required><button class="btn" type="submit">Import</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

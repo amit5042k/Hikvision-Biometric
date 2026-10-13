@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}{{ 'Edit' if emp and emp.id else 'Add' }} employee{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ 'Edit employee' if emp and emp.id else 'Add employee' }}</h1></div>
+<form method="post" class="card">
+  {{ csrf() }}
+  <div class="form-grid">
+    <label>Employee No. *<input name="employee_no" value="{{ emp.employee_no if emp else '' }}" required maxlength="32" pattern="[A-Za-z0-9]+" title="Letters and digits only">
+      <span class="muted small" style="font-weight:400">Same as the “Employee ID” on the terminal.</span></label>
+    <label>Full name *<input name="name" value="{{ emp.name if emp else '' }}" required maxlength="64"></label>
+    <label>Department<select name="department_id"><option value="">—</option>
+      {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if emp and emp.department_id == d.id }}>{{ d.name }}</option>{% endfor %}</select></label>
+    <label>Shift<select name="shift_id"><option value="">—</option>
+      {% for s in shifts %}<option value="{{ s.id }}" {{ 'selected' if (emp and emp.shift_id == s.id) or (not emp and loop.first) }}>{{ s.name }} ({{ s.start_time }}–{{ s.end_time }})</option>{% endfor %}</select></label>
+    <label>Designation<input name="designation" value="{{ emp.designation or '' if emp else '' }}"></label>
+    <label>Card No.<input name="card_no" value="{{ emp.card_no or '' if emp else '' }}" inputmode="numeric"></label>
+    <label>Phone<input name="phone" value="{{ emp.phone or '' if emp else '' }}"></label>
+    <label>Email<input name="email" type="email" value="{{ emp.email or '' if emp else '' }}"></label>
+    <label>Gender<select name="gender"><option value="">—</option>
+      {% for g in ['male', 'female'] %}<option value="{{ g }}" {{ 'selected' if emp and emp.gender == g }}>{{ g|capitalize }}</option>{% endfor %}</select></label>
+    <label>Joining date<input name="join_date" type="date" value="{{ emp.join_date or '' if emp else '' }}"></label>
+    <label class="check full"><input type="checkbox" name="active" {{ 'checked' if not emp or emp.active }}> Active</label>
+    <label class="check full"><input type="checkbox" name="push" {{ 'checked' if not emp }}> Also create / update this user on all enabled devices</label>
+  </div>
+  <div class="actions" style="margin-top:16px">
+    <button class="btn primary" type="submit">Save</button>
+    <a class="btn" href="{{ url_for('main.employee_detail', emp_id=emp.id) if emp and emp.id else url_for('main.employees') }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · {{ company_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-box">
+    <h1>{{ company_name }}</h1>
+    <p class="muted" style="text-align:center;margin-top:0">Attendance Management</p>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+    {% endwith %}
+    <div class="card">
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="form-grid"><span class="muted small"><b>Username</b></span><input name="username" autofocus required></label>
+        <label class="form-grid"><span class="muted small"><b>Password</b></span><input name="password" type="password" required></label>
+        <button class="btn primary" type="submit" style="justify-content:center">Sign in</button>
+      </form>
+    </div>
+  </div>
+</div>
+</body>
+</html>

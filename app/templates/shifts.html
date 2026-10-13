@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, post_button %}
+{% block title %}Shifts{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Shifts</h1><div class="muted">Working hours, grace periods and weekly offs used to compute attendance</div></div></div>
+<div class="card">
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Name</th><th>Timing</th><th class="num">Grace in/out</th><th class="num">Break</th><th class="num">Half / full day</th><th>Weekly off</th><th class="num">Employees</th><th></th></tr></thead>
+    <tbody>
+    {% for s in rows %}
+      <tr><td><b>{{ s.name }}</b></td><td>{{ s.start_time }} – {{ s.end_time }}{% if s.end_time <= s.start_time %} <span class="badge">overnight</span>{% endif %}</td>
+        <td class="num">{{ s.grace_in_min }} / {{ s.grace_out_min }} min</td><td class="num">{{ s.break_minutes }} min</td>
+        <td class="num">{{ s.half_day_hours }} / {{ s.full_day_hours }} h</td>
+        <td>{% for w in (s.weekly_off or '').split(',') if w %}{{ weekdays[w|int] }} {% endfor %}</td>
+        <td class="num">{{ s.emp_count }}</td>
+        <td>{% if user.role == 'admin' %}<div class="actions"><a class="btn sm" href="{{ url_for('main.shifts', edit=s.id) }}">Edit</a>
+          {{ post_button(url_for('main.shift_delete', sid=s.id), 'Delete', 'btn sm danger', 'Delete this shift?') }}</div>{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% if user.role == 'admin' %}
+<div class="card">
+  <h2>{{ 'Edit shift: ' ~ edit.name if edit else 'New shift' }}</h2>
+  <form method="post" class="form-grid">
+    {{ csrf() }}<input type="hidden" name="id" value="{{ edit.id if edit else '' }}">
+    <label>Name<input name="name" value="{{ edit.name if edit else '' }}" required></label>
+    <label>Start time<input type="time" name="start_time" value="{{ edit.start_time if edit else '09:00' }}" required></label>
+    <label>End time<input type="time" name="end_time" value="{{ edit.end_time if edit else '18:00' }}" required>
+      <span class="muted small" style="font-weight:400">Earlier than start = overnight shift.</span></label>
+    <label>Late grace (min)<input type="number" min="0" name="grace_in_min" value="{{ edit.grace_in_min if edit else 10 }}"></label>
+    <label>Early-exit grace (min)<input type="number" min="0" name="grace_out_min" value="{{ edit.grace_out_min if edit else 10 }}"></label>
+    <label>Unpaid break (min)<input type="number" min="0" name="break_minutes" value="{{ edit.break_minutes if edit else 0 }}"></label>
+    <label>Half-day minimum (hours)<input type="number" step="0.25" min="0" name="half_day_hours" value="{{ edit.half_day_hours if edit else 4 }}"></label>
+    <label>Full-day minimum (hours)<input type="number" step="0.25" min="0" name="full_day_hours" value="{{ edit.full_day_hours if edit else 8 }}"></label>
+    <div class="full"><div class="muted small" style="font-weight:600;margin-bottom:6px">Weekly off</div>
+      <div class="days-pick">{% set offs = (edit.weekly_off if edit else '6').split(',') %}
+        {% for w in weekdays %}<label class="check"><input type="checkbox" name="weekly_off" value="{{ loop.index0 }}" {{ 'checked' if loop.index0|string in offs }}> {{ w }}</label>{% endfor %}</div></div>
+    <div class="full actions"><button class="btn primary" type="submit">Save shift</button>{% if edit %}<a class="btn" href="{{ url_for('main.shifts') }}">Cancel</a>{% endif %}</div>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

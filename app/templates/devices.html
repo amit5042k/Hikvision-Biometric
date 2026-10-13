@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, post_button %}
+{% block title %}Devices{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Devices</h1><div class="muted">Hikvision face terminals (DS-K1T320EFWX and other ISAPI access-control models)</div></div>
+  {% if user.role == 'admin' %}<a class="btn primary" href="{{ url_for('main.device_form') }}">+ Add device</a>{% endif %}
+</div>
+{% for d in devices %}
+<div class="card">
+  <div class="page-head" style="margin-bottom:8px">
+    <div>
+      <h2 style="margin:0"><span class="dot {{ d.last_status or '' }}"></span>{{ d.name }} {% if not d.enabled %}<span class="badge">disabled</span>{% endif %}</h2>
+      <div class="muted small">{{ d.scheme }}://{{ d.host }}:{{ d.port }} · door {{ d.door_no }} · UTC{{ d.tz_offset }}
+        {% if d.model %} · {{ d.model }} · S/N {{ d.serial_no }} · FW {{ d.firmware }}{% endif %}</div>
+    </div>
+    {% if user.role == 'admin' %}
+    <div class="actions">
+      <a class="btn sm" href="{{ url_for('main.device_form', dev_id=d.id) }}">Edit</a>
+      {{ post_button(url_for('main.device_delete', dev_id=d.id), 'Delete', 'btn sm danger', 'Remove this device? Punches already downloaded are kept.') }}
+    </div>
+    {% endif %}
+  </div>
+  <div class="muted small" style="margin-bottom:12px">
+    Last sync: {{ d.last_sync_at or 'never' }} · Last event: {{ d.last_event_time or '—' }} · {{ d.punch_count }} punches stored
+    {% if d.last_status == 'error' %}<div class="flash error" style="margin:8px 0 0">{{ d.last_error }}</div>{% endif %}
+  </div>
+  {% if user.role == 'admin' %}
+  <div class="actions">
+    {{ post_button(url_for('main.device_action', dev_id=d.id, action='test'), 'Test connection', 'btn') }}
+    {{ post_button(url_for('main.device_action', dev_id=d.id, action='sync-events'), 'Download new punches', 'btn primary') }}
+    {{ post_button(url_for('main.device_action', dev_id=d.id, action='sync-users'), 'Import users from device', 'btn') }}
+    {{ post_button(url_for('main.device_action', dev_id=d.id, action='push-users'), 'Send all employees to device', 'btn', 'Create/update every active employee on this device?') }}
+    {{ post_button(url_for('main.device_action', dev_id=d.id, action='set-time'), 'Sync device clock', 'btn') }}
+    {{ post_button(url_for('main.device_action', dev_id=d.id, action='open-door'), 'Open door', 'btn', 'Unlock the door now?') }}
+  </div>
+  <details style="margin-top:14px">
+    <summary>Download punches for a date range</summary>
+    <form method="post" action="{{ url_for('main.device_action', dev_id=d.id, action='sync-events') }}" class="filters" style="margin-top:10px">
+      {{ csrf() }}
+      <label>From<input type="date" name="start" required></label>
+      <label>To<input type="date" name="end" required></label>
+      <button class="btn" type="submit">Download</button>
+    </form>
+  </details>
+  <details style="margin-top:10px">
+    <summary>Real-time push (HTTP listening)</summary>
+    <p class="muted small">The terminal can push every punch to this server instantly. Enter the LAN address the terminal should use to reach this server.
+      Polling still runs as a backup.</p>
+    <form method="post" action="{{ url_for('main.device_action', dev_id=d.id, action='configure-push') }}" class="filters">
+      {{ csrf() }}
+      <label>Server IP<input name="server_ip" placeholder="192.168.1.10" required></label>
+      <label>Port<input name="server_port" type="number" value="{{ request.host.split(':')[1] if ':' in request.host else 80 }}" required></label>
+      <button class="btn" type="submit">Configure push</button>
+    </form>
+  </details>
+  {% endif %}
+</div>
+{% else %}
+<div class="card">
+  <h2>No devices configured</h2>
+  <p>Add your DS-K1T320EFWX terminal. On the terminal (or via its web page) note its IP address and admin password, and make sure ISAPI is enabled
+    (<i>Configuration → Network → Advanced → Integration Protocol → Enable ISAPI</i>).</p>
+  {% if user.role == 'admin' %}<a class="btn primary" href="{{ url_for('main.device_form') }}">+ Add device</a>{% endif %}
+</div>
+{% endfor %}
+<div class="card">
+  <h2>How punches arrive</h2>
+  <ul class="muted">
+    <li><b>Polling:</b> the server downloads new events from every enabled device every few minutes (set the interval in Settings).</li>
+    <li><b>Push:</b> optionally, configure the device to send events to <code>{{ url_for('main.device_push', _external=True) }}{% if push_token %}?token=…{% endif %}</code> for instant updates.</li>
+    <li>Duplicates are ignored, so both can run at the same time.</li>
+  </ul>
+</div>
+{% endblock %}

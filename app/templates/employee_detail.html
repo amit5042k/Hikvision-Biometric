@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, badge %}
+{% block title %}{{ emp.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ emp.name }}</h1>
+    <div class="muted">#{{ emp.employee_no }} · {{ emp.department or 'No department' }}{% if emp.designation %} · {{ emp.designation }}{% endif %}
+      · Shift: {{ emp.shift_name or 'none' }}{% if emp.start_time %} ({{ emp.start_time }}–{{ emp.end_time }}){% endif %}</div></div>
+  {% if user.role == 'admin' %}
+  <div class="actions">
+    <a class="btn" href="{{ url_for('main.employee_form', emp_id=emp.id) }}">Edit</a>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="page-head" style="margin-bottom:10px">
+    <h2 style="margin:0">{{ month_label }}</h2>
+    <form class="filters" method="get"><input type="month" name="month" value="{{ month }}"><button class="btn" type="submit">Go</button></form>
+  </div>
+  <div class="stats">
+    <div class="stat ok"><div class="num">{{ summary.present }}</div><div class="lbl">Present</div></div>
+    <div class="stat bad"><div class="num">{{ summary.absent }}</div><div class="lbl">Absent</div></div>
+    <div class="stat info"><div class="num">{{ summary.leave }}</div><div class="lbl">Leave</div></div>
+    <div class="stat warn"><div class="num">{{ summary.late }}</div><div class="lbl">Late days</div></div>
+    <div class="stat"><div class="num">{{ summary.work_minutes|hm or '0:00' }}</div><div class="lbl">Work hours</div></div>
+    <div class="stat"><div class="num">{{ summary.ot_minutes|hm or '0:00' }}</div><div class="lbl">Overtime</div></div>
+    <div class="stat"><div class="num">{{ summary.payable }}</div><div class="lbl">Payable days</div></div>
+  </div>
+  <div class="calendar">
+    {% for w in weekdays %}<div class="hd">{{ w }}</div>{% endfor %}
+    {% for _ in range(pad) %}<div></div>{% endfor %}
+    {% for d in days %}
+      <div class="cell {{ 'today' if d.date == d.date.today() }}">
+        <div class="d">{{ d.date.day }} {{ badge(d) }}</div>
+        {% if d.first_in %}<div>{{ d.first_in.strftime('%H:%M') }}{% if d.last_out %} – {{ d.last_out.strftime('%H:%M') }}{% endif %}</div>{% endif %}
+        {% if d.work_minutes %}<div class="muted">{{ d.work_minutes|hm }} h</div>{% endif %}
+        {% if d.late_minutes %}<div class="late">Late {{ d.late_minutes }}m</div>{% endif %}
+        {% if d.remarks and not d.first_in %}<div class="muted">{{ d.remarks|join(', ') }}</div>{% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <h2>Details</h2>
+    <table><tbody>
+      <tr><td class="muted">Card No.</td><td>{{ emp.card_no or '—' }}</td></tr>
+      <tr><td class="muted">Phone</td><td>{{ emp.phone or '—' }}</td></tr>
+      <tr><td class="muted">Email</td><td>{{ emp.email or '—' }}</td></tr>
+      <tr><td class="muted">Joined</td><td>{{ emp.join_date or '—' }}</td></tr>
+      <tr><td class="muted">Face enrolled</td><td>{{ 'Yes' if emp.has_face else 'No' }}</td></tr>
+      <tr><td class="muted">Status</td><td>{{ 'Active' if emp.active else 'Inactive' }}</td></tr>
+    </tbody></table>
+    <h2 style="margin-top:18px">Recent leave</h2>
+    {% for l in leaves %}<div>{{ l.start_date }}{% if l.end_date != l.start_date %} → {{ l.end_date }}{% endif %} · {{ l.leave_type }}{% if l.half_day %} (half){% endif %}</div>
+    {% else %}<p class="muted">None.</p>{% endfor %}
+  </div>
+  {% if user.role == 'admin' %}
+  <div class="card">
+    <h2>Device enrolment</h2>
+    <form method="post" action="{{ url_for('main.employee_push', emp_id=emp.id) }}" class="actions">
+      {{ csrf() }}<button class="btn" type="submit">Send user &amp; card to all devices</button>
+    </form>
+    <h2 style="margin-top:18px">Enrol face photo</h2>
+    <p class="muted small">Upload a front-facing JPEG (well lit, under 200 KB). It is sent to every enabled terminal. You can also enrol the face directly on the device.</p>
+    <form method="post" action="{{ url_for('main.employee_face', emp_id=emp.id) }}" enctype="multipart/form-data" class="filters">
+      {{ csrf() }}<input type="file" name="photo" accept="image/jpeg" required><button class="btn" type="submit">Upload face</button>
+    </form>
+    <h2 style="margin-top:18px">Add manual punch</h2>
+    <form method="post" action="{{ url_for('main.punch_add') }}" class="filters">
+      {{ csrf() }}<input type="hidden" name="employee_id" value="{{ emp.id }}">
+      <input type="datetime-local" name="punch_time" required><input name="note" placeholder="Reason">
+      <button class="btn" type="submit">Add</button>
+    </form>
+    <h2 style="margin-top:18px">Remove</h2>
+    <form method="post" action="{{ url_for('main.employee_delete', emp_id=emp.id) }}" data-confirm="Remove {{ emp.name }}?">
+      {{ csrf() }}
+      <label class="check"><input type="checkbox" name="keep_history" checked> Keep attendance history (deactivate only)</label>
+      <label class="check"><input type="checkbox" name="from_devices" checked> Delete from devices too</label>
+      <button class="btn danger" type="submit" style="margin-top:8px">Remove employee</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

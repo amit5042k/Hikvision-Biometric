@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, post_button %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Settings</h1></div>
+<div class="grid grid-2">
+{% if user.role == 'admin' %}
+  <div class="card">
+    <h2>General</h2>
+    <form method="post" class="form-grid">
+      {{ csrf() }}<input type="hidden" name="form" value="general">
+      <label class="full">Company name<input name="company_name" value="{{ settings.company_name }}"></label>
+      <label>Auto-sync interval (minutes, 0 = off)<input type="number" min="0" name="sync_interval_min" value="{{ settings.sync_interval_min }}"></label>
+      <label>First sync looks back (days)<input type="number" min="1" name="initial_sync_days" value="{{ settings.initial_sync_days }}"></label>
+      <label>Event minor codes<input name="event_minors" value="{{ settings.event_minors }}">
+        <span class="muted small" style="font-weight:400">75 face, 1 card, 38 fingerprint. Use 0 for all events.</span></label>
+      <label>Count punches from (hours before shift)<input type="number" step="0.5" min="0" name="window_before_hours" value="{{ settings.window_before_hours }}"></label>
+      <label>Minimum overtime (minutes)<input type="number" min="0" name="ot_min_minutes" value="{{ settings.ot_min_minutes }}"></label>
+      <label>Push endpoint token<input name="push_token" value="{{ settings.push_token }}" placeholder="optional">
+        <span class="muted small" style="font-weight:400">When set, device pushes must include ?token=…</span></label>
+      <div class="full"><button class="btn primary" type="submit">Save settings</button></div>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Departments</h2>
+    <form method="post" action="{{ url_for('main.department_add') }}" class="filters">
+      {{ csrf() }}<input name="name" placeholder="New department" required><button class="btn" type="submit">Add</button>
+    </form>
+    <table style="margin-top:12px"><tbody>
+      {% for d in departments %}<tr><td>{{ d.name }}</td><td class="num muted">{{ d.n }} employees</td>
+        <td>{{ post_button(url_for('main.department_delete', did=d.id), 'Delete', 'btn sm danger', 'Delete department ' ~ d.name ~ '?') }}</td></tr>
+      {% else %}<tr><td class="muted">No departments yet.</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+  <div class="card">
+    <h2>Users</h2>
+    <table><tbody>
+      {% for u in users %}<tr><td>{{ u.username }}</td><td><span class="badge">{{ u.role }}</span></td>
+        <td>{% if u.id != user.id %}<form method="post" class="inline" data-confirm="Delete user {{ u.username }}?">{{ csrf() }}<input type="hidden" name="form" value="delete_user"><input type="hidden" name="user_id" value="{{ u.id }}"><button class="btn sm danger">Delete</button></form>{% endif %}</td></tr>{% endfor %}
+    </tbody></table>
+    <form method="post" class="filters" style="margin-top:12px">
+      {{ csrf() }}<input type="hidden" name="form" value="user">
+      <label>Username<input name="username" required></label>
+      <label>Password<input name="password" type="password" minlength="6" required></label>
+      <label>Role<select name="role"><option value="admin">Admin</option><option value="viewer">Viewer (read-only)</option></select></label>
+      <button class="btn" type="submit">Add user</button>
+    </form>
+  </div>
+{% endif %}
+  <div class="card">
+    <h2>Change your password</h2>
+    <form method="post" class="form-grid">
+      {{ csrf() }}<input type="hidden" name="form" value="password">
+      <label class="full">Current password<input type="password" name="current_password" required></label>
+      <label>New password<input type="password" name="new_password" minlength="6" required></label>
+      <label>Confirm<input type="password" name="confirm_password" minlength="6" required></label>
+      <div class="full"><button class="btn primary" type="submit">Change password</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}

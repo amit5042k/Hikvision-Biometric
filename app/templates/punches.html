@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, post_button %}
+{% block title %}Punch log{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Punch log</h1><div class="muted">{{ total }} punches{% if total > rows|length %} (showing latest {{ rows|length }}){% endif %}</div></div>
+  <a class="btn" href="{{ url_for('main.punches', start=start, end=end, q=q, export=1) }}">Export CSV</a>
+</div>
+<div class="card">
+  <form class="filters" method="get">
+    <label>From<input type="date" name="start" value="{{ start }}"></label>
+    <label>To<input type="date" name="end" value="{{ end }}"></label>
+    <label>Employee<input name="q" value="{{ q }}" placeholder="Number or name"></label>
+    <button class="btn" type="submit">Filter</button>
+  </form>
+</div>
+{% if user.role == 'admin' %}
+<div class="card">
+  <h2>Add manual punch</h2>
+  <form method="post" action="{{ url_for('main.punch_add') }}" class="filters">
+    {{ csrf() }}
+    <label>Employee<select name="employee_id" required><option value="">Select…</option>
+      {% for e in employees %}<option value="{{ e.id }}">{{ e.name }} (#{{ e.employee_no }})</option>{% endfor %}</select></label>
+    <label>Date &amp; time<input type="datetime-local" name="punch_time" required></label>
+    <label>Reason<input name="note" placeholder="e.g. Forgot to punch"></label>
+    <button class="btn primary" type="submit">Add punch</button>
+  </form>
+</div>
+{% endif %}
+<div class="card">
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Time</th><th>No.</th><th>Name</th><th>Device</th><th>Source</th><th>Verify</th><th>Note</th><th></th></tr></thead>
+    <tbody>
+    {% for p in rows %}
+      <tr>
+        <td>{{ p.punch_time }}</td><td>{{ p.employee_no }}</td>
+        <td>{% if p.emp_id %}<a href="{{ url_for('main.employee_detail', emp_id=p.emp_id) }}">{{ p.name }}</a>{% endif %}</td>
+        <td>{{ p.device or '—' }}</td><td><span class="badge">{{ p.source }}</span></td>
+        <td class="small">{{ p.verify_mode or '' }}</td><td class="small muted wrap">{{ p.note or '' }}</td>
+        <td>{% if user.role == 'admin' %}{{ post_button(url_for('main.punch_delete', punch_id=p.id), 'Delete', 'btn sm danger', 'Delete this punch?') }}{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8" class="muted">No punches in this range.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

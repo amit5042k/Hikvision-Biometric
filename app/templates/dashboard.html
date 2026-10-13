@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Dashboard</h1><div class="muted">{{ today.strftime('%A, %d %B %Y') }}</div></div>
+  <a class="btn" href="{{ url_for('main.attendance_daily') }}">Today's attendance →</a>
+</div>
+<div class="stats">
+  <div class="stat"><div class="num">{{ counts.total }}</div><div class="lbl">Active employees</div></div>
+  <div class="stat ok"><div class="num">{{ counts.P }}</div><div class="lbl">Present</div></div>
+  <div class="stat bad"><div class="num">{{ counts.A }}</div><div class="lbl">Absent</div></div>
+  <div class="stat warn"><div class="num">{{ counts.late }}</div><div class="lbl">Late</div></div>
+  <div class="stat info"><div class="num">{{ counts.L }}</div><div class="lbl">On leave</div></div>
+  <div class="stat"><div class="num">{{ counts.pending }}</div><div class="lbl">Not in yet</div></div>
+</div>
+<div class="grid grid-2">
+  <div class="card">
+    <h2>Present — last 7 days</h2>
+    <div class="bars">
+      {% for d, n in trend.items() %}
+      <div class="bar"><b>{{ n }}</b><span class="fill" style="height: {{ (n / trend_max * 100)|round }}%"></span>{{ d.strftime('%a %d') }}</div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="card">
+    <h2>Devices</h2>
+    {% if devices %}
+    <table>
+      <thead><tr><th>Device</th><th>Status</th><th>Last sync</th></tr></thead>
+      <tbody>
+      {% for d in devices %}
+        <tr><td><a href="{{ url_for('main.devices') }}">{{ d.name }}</a><div class="muted small">{{ d.host }}</div></td>
+            <td><span class="dot {{ d.last_status or '' }}"></span>{{ 'Disabled' if not d.enabled else (d.last_status or 'never synced')|capitalize }}</td>
+            <td class="small">{{ d.last_sync_at or '—' }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p class="muted">No devices yet. <a href="{{ url_for('main.device_form') }}">Add your DS-K1T320 terminal</a> to start collecting punches.</p>
+    {% endif %}
+  </div>
+  <div class="card">
+    <h2>Late today</h2>
+    {% if late_today %}
+    <table><tbody>
+      {% for e, d in late_today %}
+        <tr><td><a href="{{ url_for('main.employee_detail', emp_id=e.id) }}">{{ e.name }}</a></td>
+            <td>{{ d.first_in.strftime('%H:%M') }}</td><td class="late num">+{{ d.late_minutes }} min</td></tr>
+      {% endfor %}
+    </tbody></table>
+    {% else %}<p class="muted">Nobody is late today.</p>{% endif %}
+  </div>
+  <div class="card">
+    <h2>Recent punches</h2>
+    {% if recent %}
+    <div class="table-wrap"><table><tbody>
+      {% for p in recent %}
+        <tr><td>{{ p.name or p.employee_no }}</td><td class="small">{{ p.punch_time }}</td><td class="muted small">{{ p.device or p.source }}</td></tr>
+      {% endfor %}
+    </tbody></table></div>
+    {% else %}<p class="muted">No punches recorded yet.</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, post_button %}
+{% block title %}Holidays{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Holidays {{ year }}</h1></div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('main.holidays', year=year - 1) }}">← {{ year - 1 }}</a>
+    <a class="btn" href="{{ url_for('main.holidays', year=year + 1) }}">{{ year + 1 }} →</a>
+  </div>
+</div>
+{% if user.role == 'admin' %}
+<div class="card">
+  <form method="post" class="filters">
+    {{ csrf() }}
+    <label>Date<input type="date" name="date" required></label>
+    <label>Name<input name="name" placeholder="e.g. Diwali" required></label>
+    <button class="btn primary" type="submit">Add holiday</button>
+  </form>
+</div>
+{% endif %}
+<div class="card">
+  <table>
+    <thead><tr><th>Date</th><th>Day</th><th>Holiday</th><th></th></tr></thead>
+    <tbody>
+    {% for h in rows %}
+      <tr><td>{{ h.date }}</td><td>{{ h.date|dayname }}</td><td>{{ h.name }}</td>
+        <td>{% if user.role == 'admin' %}{{ post_button(url_for('main.holiday_delete', hid=h.id), 'Delete', 'btn sm danger', 'Delete this holiday?') }}{% endif %}</td></tr>
+    {% else %}<tr><td colspan="4" class="muted">No holidays for {{ year }}.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

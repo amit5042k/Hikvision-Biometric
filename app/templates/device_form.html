@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Device{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ 'Edit device' if dev and dev.id else 'Add device' }}</h1></div>
+<form method="post" class="card">
+  {{ csrf() }}
+  <div class="form-grid">
+    <label>Name<input name="name" value="{{ dev.name if dev else 'Main Entrance' }}" required></label>
+    <label>IP address / host *<input name="host" value="{{ dev.host if dev else '' }}" placeholder="192.168.1.64" required></label>
+    <label>Port<input name="port" type="number" value="{{ dev.port if dev else 80 }}"></label>
+    <label>Protocol<select name="scheme">{% for s in ['http', 'https'] %}<option {{ 'selected' if dev and dev.scheme == s }}>{{ s }}</option>{% endfor %}</select></label>
+    <label>Username<input name="username" value="{{ dev.username if dev else 'admin' }}" autocomplete="off"></label>
+    <label>Password<input name="password" type="password" autocomplete="new-password" placeholder="{{ 'Leave blank to keep current' if dev and dev.id else '' }}"></label>
+    <label>Door no.<input name="door_no" type="number" min="1" value="{{ dev.door_no if dev else 1 }}"></label>
+    <label>Device UTC offset<input name="tz_offset" value="{{ dev.tz_offset if dev else '+05:30' }}" pattern="[+-]\d{2}:\d{2}" title="e.g. +05:30">
+      <span class="muted small" style="font-weight:400">Time zone set on the terminal, e.g. +05:30 for India.</span></label>
+    <label class="check full"><input type="checkbox" name="enabled" {{ 'checked' if not dev or dev.enabled }}> Enabled (include in automatic sync)</label>
+  </div>
+  <div class="actions" style="margin-top:16px">
+    <button class="btn primary" type="submit">Save</button>
+    <a class="btn" href="{{ url_for('main.devices') }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

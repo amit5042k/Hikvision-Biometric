@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, post_button %}
+{% block title %}Leaves{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Leaves</h1></div>
+{% if user.role == 'admin' %}
+<div class="card">
+  <h2>Record leave</h2>
+  <form method="post" class="form-grid">
+    {{ csrf() }}
+    <label>Employee<select name="employee_id" required><option value="">Select…</option>
+      {% for e in employees %}<option value="{{ e.id }}">{{ e.name }} (#{{ e.employee_no }})</option>{% endfor %}</select></label>
+    <label>From<input type="date" name="start_date" value="{{ today }}" required></label>
+    <label>To<input type="date" name="end_date" value="{{ today }}" required></label>
+    <label>Type<select name="leave_type">{% for t in ['Casual', 'Sick', 'Earned', 'Unpaid', 'Comp Off', 'Maternity', 'Other'] %}<option>{{ t }}</option>{% endfor %}</select></label>
+    <label>Reason<input name="reason"></label>
+    <label class="check"><input type="checkbox" name="half_day"> Half day</label>
+    <div class="full"><button class="btn primary" type="submit">Save leave</button></div>
+  </form>
+</div>
+{% endif %}
+<div class="card">
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Employee</th><th>From</th><th>To</th><th>Type</th><th>Half day</th><th>Reason</th><th></th></tr></thead>
+    <tbody>
+    {% for l in rows %}
+      <tr><td>{{ l.name }} <span class="muted">#{{ l.employee_no }}</span></td><td>{{ l.start_date }}</td><td>{{ l.end_date }}</td>
+        <td><span class="badge s-L">{{ l.leave_type }}</span></td><td>{{ 'Yes' if l.half_day else '' }}</td><td class="wrap">{{ l.reason or '' }}</td>
+        <td>{% if user.role == 'admin' %}{{ post_button(url_for('main.leave_delete', leave_id=l.id), 'Delete', 'btn sm danger', 'Delete this leave?') }}{% endif %}</td></tr>
+    {% else %}<tr><td colspan="7" class="muted">No leave recorded.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

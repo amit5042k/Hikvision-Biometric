@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge %}
+{% block title %}Daily attendance{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Daily attendance</h1><div class="muted">{{ day.strftime('%A, %d %B %Y') }}</div></div>
+  <div class="actions no-print">
+    <a class="btn" href="{{ url_for('main.attendance_daily', date=prev, department=dept or '', status=status) }}">← Prev</a>
+    <a class="btn" href="{{ url_for('main.attendance_daily', date=next, department=dept or '', status=status) }}">Next →</a>
+    <a class="btn" href="{{ url_for('main.attendance_daily', date=day, department=dept or '', status=status, export=1) }}">Export CSV</a>
+    <button class="btn" onclick="window.print()">Print</button>
+  </div>
+</div>
+<div class="card">
+  <form class="filters" method="get">
+    <label>Date<input type="date" name="date" value="{{ day }}"></label>
+    <label>Department<select name="department"><option value="">All</option>
+      {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if d.id == dept }}>{{ d.name }}</option>{% endfor %}</select></label>
+    <label>Status<select name="status"><option value="">All</option>
+      {% for v in ['P', 'A', 'HD', 'MP', 'L', 'H', 'WO'] %}<option value="{{ v }}" {{ 'selected' if v == status }}>{{ STATUS_LABELS[v] }}</option>{% endfor %}
+      <option value="late" {{ 'selected' if status == 'late' }}>Late</option></select></label>
+    <button class="btn" type="submit">Show</button>
+  </form>
+</div>
+<div class="card">
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>No.</th><th>Name</th><th>Department</th><th>Shift</th><th>Status</th><th>In</th><th>Out</th>
+      <th class="num">Work</th><th class="num">Late</th><th class="num">Early</th><th class="num">OT</th><th>Remarks</th></tr></thead>
+    <tbody>
+    {% for e, d in rows %}
+      <tr>
+        <td>{{ e.employee_no }}</td>
+        <td><a href="{{ url_for('main.employee_detail', emp_id=e.id, month=day.strftime('%Y-%m')) }}">{{ e.name }}</a></td>
+        <td>{{ e.department or '' }}</td><td class="small">{{ e.shift_name or '' }}</td>
+        <td>{{ badge(d) }}</td>
+        <td>{{ d.first_in.strftime('%H:%M') if d.first_in else '' }}</td>
+        <td>{{ d.last_out.strftime('%H:%M') if d.last_out else '' }}</td>
+        <td class="num">{{ d.work_minutes|hm }}</td>
+        <td class="num {{ 'late' if d.late_minutes }}">{{ d.late_minutes or '' }}</td>
+        <td class="num">{{ d.early_minutes or '' }}</td>
+        <td class="num">{{ d.ot_minutes|hm }}</td>
+        <td class="small muted wrap">{{ d.remarks|join(', ') }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="12" class="muted">No employees match.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted small">Late / Early in minutes. P Present · A Absent · HD Half day · MP Missing punch · L Leave · H Holiday · WO Weekly off.</p>
+</div>
+{% endblock %}
