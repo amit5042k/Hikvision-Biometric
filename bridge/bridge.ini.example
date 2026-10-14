@@ -1,0 +1,7 @@
+; Copy this file to bridge.ini (same folder) and fill in both values.
+; Both are shown in the web app under Settings → Bridge agent.
+[bridge]
+server_url = https://attendance.yourdomain.com
+token = paste-the-bridge-token-here
+; how often (seconds) to check the server for queued actions
+poll_seconds = 20

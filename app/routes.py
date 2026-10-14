@@ -1,11 +1,13 @@
+import base64
 import csv
 import io
 import json
+import secrets
 from calendar import monthrange
 from datetime import date, datetime, timedelta
 
-from flask import (Blueprint, Response, flash, g, jsonify, redirect, render_template, request,
-                   session, url_for)
+from flask import (Blueprint, Response, current_app, flash, g, jsonify, redirect, render_template, request,
+                   send_file, session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import admin_required, login_required
@@ -13,7 +15,6 @@ from . import attendance as att
 from . import db as dbmod
 from . import sync
 from .db import get_db
-from .hikvision import HikvisionError
 
 bp = Blueprint("main", __name__)
 
@@ -204,25 +205,20 @@ def employee_form(emp_id=None):
 
 
 def _push_to_devices(emp_id, device_ids=None):
+    """Create/update one employee on every enabled device; returns a flash-ready summary."""
     db = get_db()
     emp = db.execute("SELECT * FROM employees WHERE id = ?", (emp_id,)).fetchone()
-    sql = "SELECT * FROM devices WHERE enabled = 1"
-    devices = [d for d in db.execute(sql) if not device_ids or d["id"] in device_ids]
+    payload = {"employees": [sync.employee_payload(emp)]}
+    return _dispatch_all("push-employees", payload, device_ids)
+
+
+def _dispatch_all(action, payload, device_ids=None):
+    db = get_db()
+    devices = [d for d in db.execute("SELECT * FROM devices WHERE enabled = 1").fetchall()
+               if not device_ids or d["id"] in device_ids]
     if not devices:
-        return "No enabled devices to sync to."
-    ok, errors = [], []
-    for dev in devices:
-        try:
-            sync.push_employee(dev, emp)
-            ok.append(dev["name"])
-        except HikvisionError as exc:
-            errors.append(f"{dev['name']}: {exc}")
-    parts = []
-    if ok:
-        parts.append("Sent to " + ", ".join(ok) + ".")
-    if errors:
-        parts.append("Failed - " + "; ".join(errors))
-    return " ".join(parts)
+        return "No enabled devices configured."
+    return " ".join(sync.dispatch(db, dev, action, payload, g.user["username"])[1] for dev in devices)
 
 
 @bp.route("/employees/<int:emp_id>")
@@ -265,23 +261,9 @@ def employee_face(emp_id):
     if not data.startswith(b"\xff\xd8"):
         flash("The face photo must be a JPEG image (ideally under 200 KB, face clearly visible).", "error")
         return redirect(url_for("main.employee_detail", emp_id=emp_id))
-    ok, errors = [], []
-    for dev in db.execute("SELECT * FROM devices WHERE enabled = 1").fetchall():
-        try:
-            client = sync.client_for(dev)
-            client.upsert_user(emp["employee_no"], emp["name"], emp["gender"])
-            client.upload_face(emp["employee_no"], data)
-            ok.append(dev["name"])
-        except HikvisionError as exc:
-            errors.append(f"{dev['name']}: {exc}")
-    if ok:
-        db.execute("UPDATE employees SET has_face = 1 WHERE id = ?", (emp_id,))
-        db.commit()
-        flash("Face enrolled on " + ", ".join(ok) + ".", "success")
-    if errors:
-        flash("Face upload failed - " + "; ".join(errors), "error")
-    if not ok and not errors:
-        flash("No enabled devices configured.", "error")
+    payload = {"employee_no": emp["employee_no"], "name": emp["name"], "gender": emp["gender"],
+               "image_b64": base64.b64encode(data).decode()}
+    flash(_dispatch_all("upload-face", payload), "info")
     return redirect(url_for("main.employee_detail", emp_id=emp_id))
 
 
@@ -292,13 +274,8 @@ def employee_delete(emp_id):
     emp = db.execute("SELECT * FROM employees WHERE id = ?", (emp_id,)).fetchone()
     if not emp:
         return redirect(url_for("main.employees"))
-    msgs = []
     if request.form.get("from_devices"):
-        for dev in db.execute("SELECT * FROM devices WHERE enabled = 1").fetchall():
-            try:
-                sync.client_for(dev).delete_user(emp["employee_no"])
-            except HikvisionError as exc:
-                msgs.append(f"{dev['name']}: {exc}")
+        flash(_dispatch_all("delete-employee", {"employee_no": emp["employee_no"]}), "info")
     if request.form.get("keep_history"):
         db.execute("UPDATE employees SET active = 0 WHERE id = ?", (emp_id,))
         text = f"{emp['name']} deactivated."
@@ -307,7 +284,7 @@ def employee_delete(emp_id):
         db.execute("DELETE FROM employees WHERE id = ?", (emp_id,))
         text = f"{emp['name']} deleted."
     db.commit()
-    flash(text + (" Device errors: " + "; ".join(msgs) if msgs else ""), "warning" if msgs else "success")
+    flash(text, "success")
     return redirect(url_for("main.employees"))
 
 
@@ -368,7 +345,9 @@ def devices():
     db = get_db()
     rows = db.execute("SELECT d.*, (SELECT COUNT(*) FROM punches p WHERE p.device_id = d.id) AS punch_count "
                       "FROM devices d ORDER BY name").fetchall()
-    return render_template("devices.html", devices=rows,
+    jobs = db.execute("SELECT j.*, d.name AS device FROM device_jobs j JOIN devices d ON d.id = j.device_id "
+                      "ORDER BY j.id DESC LIMIT 15").fetchall()
+    return render_template("devices.html", devices=rows, jobs=jobs,
                            push_token=dbmod.get_setting(db, "push_token"))
 
 
@@ -389,6 +368,7 @@ def device_form(dev_id=None):
             "door_no": _int(f.get("door_no"), 1),
             "tz_offset": f.get("tz_offset", "+05:30").strip() or "+05:30",
             "enabled": 1 if f.get("enabled") else 0,
+            "connection": "bridge" if f.get("connection") == "bridge" else "direct",
         }
         if f.get("password") or not dev:
             data["password"] = f.get("password", "")
@@ -427,61 +407,29 @@ def device_action(dev_id, action):
     if not dev:
         flash("Device not found.", "error")
         return redirect(url_for("main.devices"))
-    try:
-        client = sync.client_for(dev)
-        if action == "test":
-            info = client.device_info()
-            db.execute("UPDATE devices SET model = ?, serial_no = ?, firmware = ?, mac_address = ?, "
-                       "last_status = 'ok', last_error = NULL WHERE id = ?",
-                       (info.get("model"), info.get("serialNumber"), info.get("firmwareVersion"),
-                        info.get("macAddress"), dev_id))
-            db.commit()
-            flash(f"Connected: {info.get('model', '?')} (S/N {info.get('serialNumber', '?')}, "
-                  f"firmware {info.get('firmwareVersion', '?')}).", "success")
-        elif action == "sync-events":
-            start = att.parse_date(request.form.get("start"))
-            end = att.parse_date(request.form.get("end"))
-            res = sync.sync_events(
-                db, dev,
-                datetime.combine(start, datetime.min.time()) if start else None,
-                datetime.combine(end, datetime.max.time().replace(microsecond=0)) if end else None)
-            flash(f"Downloaded {res['seen']} events, {res['added']} new punches.", "success")
-        elif action == "sync-users":
-            res = sync.sync_users_from_device(db, dev)
-            flash(f"Imported users: {res['created']} new, {res['existing']} already known.", "success")
-        elif action == "push-users":
-            count, errors = 0, []
-            for emp in db.execute("SELECT * FROM employees WHERE active = 1"):
-                try:
-                    sync.push_employee(dev, emp, client)
-                    count += 1
-                except HikvisionError as exc:
-                    errors.append(f"{emp['employee_no']}: {exc}")
-            flash(f"Sent {count} employees to {dev['name']}." +
-                  (f" {len(errors)} failed: " + "; ".join(errors[:5]) if errors else ""),
-                  "warning" if errors else "success")
-        elif action == "set-time":
-            client.set_time(sync.device_now(dev["tz_offset"]))
-            flash("Device clock set to current time.", "success")
-        elif action == "open-door":
-            client.open_door()
-            flash("Door open command sent.", "success")
-        elif action == "configure-push":
-            ip = request.form.get("server_ip", "").strip()
-            port = _int(request.form.get("server_port"), 5000)
-            if not ip:
-                flash("Enter this server's LAN IP address.", "error")
-            else:
-                token = dbmod.get_setting(db, "push_token")
-                path = url_for("main.device_push") + (f"?token={token}" if token else "")
-                client.set_http_host(ip, port, path)
-                flash(f"Device will now push events to http://{ip}:{port}{path}", "success")
-        else:
-            flash("Unknown action.", "error")
-    except HikvisionError as exc:
-        db.execute("UPDATE devices SET last_status = 'error', last_error = ? WHERE id = ?", (str(exc), dev_id))
-        db.commit()
-        flash(str(exc), "error")
+    payload = None
+    if action == "sync-events":
+        start = att.parse_date(request.form.get("start"))
+        end = att.parse_date(request.form.get("end"))
+        if start and end:
+            payload = {"start": f"{start} 00:00:00", "end": f"{end} 23:59:59"}
+    elif action == "push-users":
+        action = "push-employees"
+        payload = {"employees": [sync.employee_payload(e)
+                                 for e in db.execute("SELECT * FROM employees WHERE active = 1")]}
+    elif action == "configure-push":
+        ip = request.form.get("server_ip", "").strip()
+        if not ip:
+            flash("Enter the server address the terminal should send events to.", "error")
+            return redirect(url_for("main.devices"))
+        token = dbmod.get_setting(db, "push_token")
+        payload = {"ip": ip, "port": _int(request.form.get("server_port"), 80),
+                   "path": url_for("main.device_push") + (f"?token={token}" if token else "")}
+    elif action not in ("test", "sync-users", "set-time", "open-door"):
+        flash("Unknown action.", "error")
+        return redirect(url_for("main.devices"))
+    category, message = sync.dispatch(db, dev, action, payload, g.user["username"])
+    flash(message, category)
     return redirect(request.referrer or url_for("main.devices"))
 
 
@@ -846,6 +794,10 @@ def settings():
                            (username, generate_password_hash(password), role))
                 db.commit()
                 flash(f"User {username} created.", "success")
+        elif form == "regen_bridge":
+            dbmod.set_setting(db, "bridge_token", secrets.token_urlsafe(24))
+            db.commit()
+            flash("New bridge token created. Update bridge.ini on the bridge PC, then restart the bridge.", "warning")
         elif form == "delete_user":
             uid = _int(request.form.get("user_id"))
             if uid == g.user["id"]:
@@ -856,7 +808,17 @@ def settings():
                 flash("User deleted.", "success")
         return redirect(url_for("main.settings"))
     return render_template("settings.html", settings=dbmod.get_settings(db),
+                           schema_version=db.execute("PRAGMA user_version").fetchone()[0],
+                           server_url=request.host_url.rstrip("/"),
                            users=db.execute("SELECT id, username, role, created_at FROM users ORDER BY username"),
                            departments=db.execute(
                                "SELECT d.*, (SELECT COUNT(*) FROM employees e WHERE e.department_id = d.id) AS n "
                                "FROM departments d ORDER BY name").fetchall())
+
+
+@bp.route("/settings/backup")
+@admin_required
+def download_backup():
+    """Take a fresh database backup and download it."""
+    path = dbmod.backup(current_app.config["DATABASE"], current_app.config["BACKUP_DIR"])
+    return send_file(path, as_attachment=True, download_name=path.name)

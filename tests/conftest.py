@@ -11,7 +11,8 @@ from app import db as dbmod
 
 @pytest.fixture
 def app(tmp_path):
-    app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "test.db"), "SECRET_KEY": "test"})
+    app = create_app({"TESTING": True, "DATA_DIR": str(tmp_path), "DATABASE": str(tmp_path / "test.db"),
+                      "BACKUP_DIR": str(tmp_path / "backups"), "SECRET_KEY": "test"})
     yield app
 
 

@@ -51,14 +51,24 @@ Configuration through environment variables (all optional):
 | Variable | Default | Purpose |
 |---|---|---|
 | `HOST` / `PORT` | `0.0.0.0` / `5000` | Listen address |
-| `ATTENDANCE_DB` | `instance/attendance.db` | SQLite database path |
-| `SECRET_KEY` | auto-generated in `instance/secret_key` | Session signing key |
+| `ATTENDANCE_DATA_DIR` | `instance/` | Folder for the database, session key and backups. On a server, keep it **outside** the code folder |
+| `ATTENDANCE_DB` | `<data dir>/attendance.db` | Override the database path only |
+| `SECRET_KEY` | generated once in `<data dir>/secret_key` | Session signing key |
+| `BEHIND_PROXY` / `HTTPS_ONLY` | off | Set to `1` behind nginx/Passenger and when served over HTTPS |
+
+## Hosting online (GoDaddy etc.)
+
+See **[docs/DEPLOY_GODADDY.md](docs/DEPLOY_GODADDY.md)** for step-by-step instructions for GoDaddy cPanel hosting and GoDaddy VPS.
+
+- **The terminal stays on the office LAN.** A small **bridge agent** (`bridge/hik_bridge.py`) on an office PC relays punches and device actions over outgoing HTTPS. When adding the device, set its connection to *Through the bridge agent*.
+- **Updates keep all data.** Run `deploy/update.sh` to update. It backs up the database, pulls the code, installs packages and restarts. Database changes ship as numbered migrations in `app/db.py`, which upgrade the existing database in place. Never edit `app/schema.sql`.
 
 Other commands:
 
 ```bash
 flask --app app sync          # download punches from all devices once (e.g. from cron)
 flask --app app reset-admin   # reset the admin password to "admin"
+flask --app app backup        # copy the database into <data dir>/backups
 ```
 
 ## Terminal preparation (DS-K1T320EFWX)
@@ -98,7 +108,13 @@ Project layout:
 
 ```
 app/hikvision.py   ISAPI client (users, cards, faces, events, time, door, push config)
-app/sync.py        device <-> database sync, push receiver, background scheduler
+app/device_actions.py  terminal operations shared by the server and the bridge agent
+app/sync.py        device <-> database sync, job dispatch (direct / bridge), push receiver, scheduler
+app/bridge_api.py  API used by the bridge agent
+app/db.py          schema migrations, backups
+bridge/            on-site bridge agent (Windows task / systemd)
+deploy/            GoDaddy / VPS deployment, update and backup scripts
+passenger_wsgi.py  entry point for cPanel "Setup Python App"
 app/attendance.py  attendance rules engine
 app/routes.py      web UI and CSV exports
 app/templates/     Jinja templates

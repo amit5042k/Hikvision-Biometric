@@ -15,6 +15,12 @@
     <label>Door no.<input name="door_no" type="number" min="1" value="{{ dev.door_no if dev else 1 }}"></label>
     <label>Device UTC offset<input name="tz_offset" value="{{ dev.tz_offset if dev else '+05:30' }}" pattern="[+-]\d{2}:\d{2}" title="e.g. +05:30">
       <span class="muted small" style="font-weight:400">Time zone set on the terminal, e.g. +05:30 for India.</span></label>
+    <label class="full">How does the server reach this terminal?
+      <select name="connection">
+        <option value="direct" {{ 'selected' if dev and dev.connection == 'direct' }}>Direct – the server is on the same network as the terminal (or port-forwarded / VPN)</option>
+        <option value="bridge" {{ 'selected' if (dev and dev.connection == 'bridge') or (not dev and request.host.split(':')[0] not in ('localhost', '127.0.0.1') and not request.host[0].isdigit()) }}>Through the bridge agent – the app is hosted online (GoDaddy etc.), the terminal is on the office LAN</option>
+      </select>
+      <span class="muted small" style="font-weight:400">With the bridge, the IP address above is the terminal's office LAN address, as seen from the bridge PC.</span></label>
     <label class="check full"><input type="checkbox" name="enabled" {{ 'checked' if not dev or dev.enabled }}> Enabled (include in automatic sync)</label>
   </div>
   <div class="actions" style="margin-top:16px">

@@ -12,6 +12,7 @@
     <div>
       <h2 style="margin:0"><span class="dot {{ d.last_status or '' }}"></span>{{ d.name }} {% if not d.enabled %}<span class="badge">disabled</span>{% endif %}</h2>
       <div class="muted small">{{ d.scheme }}://{{ d.host }}:{{ d.port }} · door {{ d.door_no }} · UTC{{ d.tz_offset }}
+        · {% if d.connection == 'bridge' %}<b>via bridge agent</b> (last check-in: {{ d.last_seen_at or 'never – is the bridge running?' }}){% else %}direct{% endif %}
         {% if d.model %} · {{ d.model }} · S/N {{ d.serial_no }} · FW {{ d.firmware }}{% endif %}</div>
     </div>
     {% if user.role == 'admin' %}
@@ -64,10 +65,27 @@
   {% if user.role == 'admin' %}<a class="btn primary" href="{{ url_for('main.device_form') }}">+ Add device</a>{% endif %}
 </div>
 {% endfor %}
+{% if jobs %}
+<div class="card">
+  <h2>Recent bridge jobs</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Queued</th><th>Device</th><th>Action</th><th>By</th><th>Status</th><th>Result</th></tr></thead>
+    <tbody>
+    {% for j in jobs %}
+      <tr><td class="small">{{ j.created_at }}</td><td>{{ j.device }}</td><td>{{ j.action }}</td><td class="small">{{ j.created_by or '' }}</td>
+        <td><span class="badge {{ 's-P' if j.status == 'done' else ('s-A' if j.status == 'failed' else 's-HD') }}">{{ j.status }}</span></td>
+        <td class="small wrap">{{ j.result or '' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="muted small">Pending jobs run the next time the bridge agent checks in (every ~20 seconds while it is running). Reload this page to see results.</p>
+</div>
+{% endif %}
 <div class="card">
   <h2>How punches arrive</h2>
   <ul class="muted">
-    <li><b>Polling:</b> the server downloads new events from every enabled device every few minutes (set the interval in Settings).</li>
+    <li><b>Polling:</b> new events are downloaded from every enabled device every few minutes (set the interval in Settings) –
+      by this server for <i>direct</i> devices, and by the bridge agent for <i>bridge</i> devices.</li>
     <li><b>Push:</b> optionally, configure the device to send events to <code>{{ url_for('main.device_push', _external=True) }}{% if push_token %}?token=…{% endif %}</code> for instant updates.</li>
     <li>Duplicates are ignored, so both can run at the same time.</li>
   </ul>

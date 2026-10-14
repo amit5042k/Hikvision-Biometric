@@ -3,6 +3,8 @@
 Nothing here is stored: attendance is always derived from the punches, so
 fixing a punch, shift, leave or holiday immediately corrects every report.
 """
+from __future__ import annotations
+
 from bisect import bisect_left
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta

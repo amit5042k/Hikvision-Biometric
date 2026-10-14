@@ -1,0 +1,18 @@
+# systemd unit for running the bridge on a Linux PC / Raspberry Pi.
+# Edit the paths and user, then:
+#   sudo cp bridge/hik-bridge.service /etc/systemd/system/
+#   sudo systemctl enable --now hik-bridge
+[Unit]
+Description=Hikvision attendance bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/Hikvision-Biometric
+ExecStart=/home/pi/Hikvision-Biometric/.venv/bin/python bridge/hik_bridge.py
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

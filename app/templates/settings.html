@@ -46,6 +46,25 @@
       <button class="btn" type="submit">Add user</button>
     </form>
   </div>
+  <div class="card">
+    <h2>Bridge agent</h2>
+    <p class="muted small">When this app is hosted online, a small program on an office PC connects the terminals to it.
+      Put these two values in <code>bridge/bridge.ini</code> on that PC.</p>
+    <table><tbody>
+      <tr><td class="muted">server_url</td><td class="wrap"><code>{{ server_url }}</code></td></tr>
+      <tr><td class="muted">token</td><td class="wrap"><code>{{ settings.bridge_token }}</code></td></tr>
+    </tbody></table>
+    <form method="post" style="margin-top:10px" data-confirm="Create a new token? The bridge stops working until you update bridge.ini with the new token.">
+      {{ csrf() }}<input type="hidden" name="form" value="regen_bridge"><button class="btn sm" type="submit">Generate new token</button>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Backup</h2>
+    <p class="muted small">Downloads a complete copy of the database: employees, punches, settings and logins.
+      A copy is also kept on the server, and one is made automatically before every upgrade that changes the database.
+      Database version: {{ schema_version }}.</p>
+    <a class="btn" href="{{ url_for('main.download_backup') }}">Download backup</a>
+  </div>
 {% endif %}
   <div class="card">
     <h2>Change your password</h2>
