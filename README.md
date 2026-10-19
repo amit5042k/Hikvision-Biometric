@@ -58,7 +58,7 @@ Configuration through environment variables (all optional):
 
 ## Hosting online (GoDaddy etc.)
 
-See **[docs/DEPLOY_GODADDY.md](docs/DEPLOY_GODADDY.md)** for step-by-step instructions for GoDaddy cPanel hosting and GoDaddy VPS.
+See **[docs/DEPLOY_GODADDY.md](docs/DEPLOY_GODADDY.md)** for step-by-step instructions for GoDaddy cPanel hosting and GoDaddy VPS. For a non-technical, illustrated overview (features, what is done, go-live checklist), see **[docs/Attendance-System-Guide.pdf](docs/Attendance-System-Guide.pdf)**.
 
 - **The terminal stays on the office LAN.** A small **bridge agent** (`bridge/hik_bridge.py`) on an office PC relays punches and device actions over outgoing HTTPS. When adding the device, set its connection to *Through the bridge agent*.
 - **Updates keep all data.** Run `deploy/update.sh` to update. It backs up the database, pulls the code, installs packages and restarts. Database changes ship as numbered migrations in `app/db.py`, which upgrade the existing database in place. Never edit `app/schema.sql`.
