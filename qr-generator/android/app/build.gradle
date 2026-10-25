@@ -1,0 +1,53 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'org.mgnurbanestate.qrgenerator'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'org.mgnurbanestate.qrgenerator'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+
+    // Release signing is read from environment variables so no secrets live in the repo.
+    // See qr-generator/README.md for how to create the keystore.
+    def ks = System.getenv('QR_KEYSTORE_FILE')
+    if (ks) {
+        signingConfigs {
+            release {
+                storeFile file(ks)
+                storePassword System.getenv('QR_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('QR_KEY_ALIAS')
+                keyPassword System.getenv('QR_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (ks) signingConfig signingConfigs.release
+        }
+    }
+
+    // The app ships the website from ../../web, so both always stay in sync.
+    sourceSets {
+        main {
+            assets.srcDirs += ['../../web']
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core:1.13.1'
+}

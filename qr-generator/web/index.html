@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>QR Generator</title>
+  <meta name="description" content="Free, private QR code generator. Make QR codes for links, text, Wi-Fi, contacts, email, SMS and phone numbers. Works offline.">
+  <meta name="theme-color" content="#4f46e5">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="icons/icon.svg" alt="" width="28" height="28">
+      <span>QR Generator</span>
+    </div>
+    <span class="tagline">Everything stays on your device</span>
+  </header>
+
+  <main class="layout">
+    <section class="panel editor" aria-label="QR content">
+      <nav class="tabs" role="tablist" id="tabs">
+        <button role="tab" data-type="url" aria-selected="true">Link</button>
+        <button role="tab" data-type="text">Text</button>
+        <button role="tab" data-type="wifi">Wi-Fi</button>
+        <button role="tab" data-type="vcard">Contact</button>
+        <button role="tab" data-type="email">Email</button>
+        <button role="tab" data-type="sms">SMS</button>
+        <button role="tab" data-type="phone">Phone</button>
+      </nav>
+
+      <form id="form" autocomplete="off" novalidate>
+        <div class="fields" data-for="url">
+          <label>Website address
+            <input name="url" type="url" inputmode="url" placeholder="https://example.com" value="https://example.com">
+          </label>
+        </div>
+
+        <div class="fields" data-for="text" hidden>
+          <label>Text
+            <textarea name="text" rows="5" placeholder="Type anything…"></textarea>
+          </label>
+        </div>
+
+        <div class="fields" data-for="wifi" hidden>
+          <label>Network name (SSID)
+            <input name="ssid" placeholder="MyHomeWiFi">
+          </label>
+          <div class="row">
+            <label>Security
+              <select name="security">
+                <option value="WPA">WPA / WPA2 / WPA3</option>
+                <option value="WEP">WEP</option>
+                <option value="nopass">None (open)</option>
+              </select>
+            </label>
+            <label>Password
+              <input name="wifiPassword" type="text" placeholder="Password">
+            </label>
+          </div>
+          <label class="check"><input name="hidden" type="checkbox"> Hidden network</label>
+        </div>
+
+        <div class="fields" data-for="vcard" hidden>
+          <div class="row">
+            <label>First name <input name="firstName"></label>
+            <label>Last name <input name="lastName"></label>
+          </div>
+          <div class="row">
+            <label>Phone <input name="vPhone" type="tel" inputmode="tel"></label>
+            <label>Email <input name="vEmail" type="email" inputmode="email"></label>
+          </div>
+          <div class="row">
+            <label>Company <input name="org"></label>
+            <label>Job title <input name="title"></label>
+          </div>
+          <label>Website <input name="vUrl" type="url" inputmode="url"></label>
+          <label>Address <input name="address"></label>
+        </div>
+
+        <div class="fields" data-for="email" hidden>
+          <label>To <input name="emailTo" type="email" inputmode="email" placeholder="name@example.com"></label>
+          <label>Subject <input name="emailSubject"></label>
+          <label>Message <textarea name="emailBody" rows="3"></textarea></label>
+        </div>
+
+        <div class="fields" data-for="sms" hidden>
+          <label>Phone number <input name="smsNumber" type="tel" inputmode="tel" placeholder="+91 98765 43210"></label>
+          <label>Message <textarea name="smsBody" rows="3"></textarea></label>
+        </div>
+
+        <div class="fields" data-for="phone" hidden>
+          <label>Phone number <input name="phone" type="tel" inputmode="tel" placeholder="+91 98765 43210"></label>
+        </div>
+
+        <details class="design" open>
+          <summary>Design</summary>
+          <div class="row">
+            <label>Foreground <input name="fg" type="color" value="#111827"></label>
+            <label>Background <input name="bg" type="color" value="#ffffff"></label>
+          </div>
+          <div class="row">
+            <label>Style
+              <select name="style">
+                <option value="square">Square</option>
+                <option value="rounded">Rounded</option>
+                <option value="dots">Dots</option>
+              </select>
+            </label>
+            <label>Error correction
+              <select name="ecl">
+                <option value="L">Low (7%)</option>
+                <option value="M" selected>Medium (15%)</option>
+                <option value="Q">Quartile (25%)</option>
+                <option value="H">High (30%)</option>
+              </select>
+            </label>
+          </div>
+          <div class="row">
+            <label>Size <output id="sizeOut">512 px</output>
+              <input name="size" type="range" min="128" max="2048" step="32" value="512">
+            </label>
+            <label>Quiet zone <output id="marginOut">4</output>
+              <input name="margin" type="range" min="0" max="10" step="1" value="4">
+            </label>
+          </div>
+          <div class="logo-row">
+            <label class="file">Center logo
+              <input id="logoInput" type="file" accept="image/*">
+            </label>
+            <button type="button" id="removeLogo" class="link" hidden>Remove logo</button>
+          </div>
+        </details>
+      </form>
+    </section>
+
+    <section class="panel preview" aria-label="QR preview">
+      <div class="canvas-wrap">
+        <canvas id="qr" width="512" height="512" aria-label="Generated QR code" role="img"></canvas>
+      </div>
+      <p id="status" class="status" role="status"></p>
+      <div class="actions">
+        <button type="button" id="downloadPng" class="primary">Download PNG</button>
+        <button type="button" id="downloadSvg">Download SVG</button>
+        <button type="button" id="copyImg">Copy</button>
+        <button type="button" id="shareImg">Share</button>
+      </div>
+      <details class="history">
+        <summary>Recent</summary>
+        <ul id="historyList"></ul>
+        <button type="button" id="clearHistory" class="link">Clear history</button>
+      </details>
+    </section>
+  </main>
+
+  <footer class="foot">QR Code is a registered trademark of DENSO WAVE INCORPORATED.</footer>
+
+  <script src="vendor/qrcode.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
