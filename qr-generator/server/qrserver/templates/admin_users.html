@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Accounts · Admin{% endblock %}
+{% block width %}1100px{% endblock %}
+{% block head %}
+<style>
+  .bar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--muted); font-weight:500; font-size:12px; text-transform:uppercase; }
+  .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
+  .actions { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .actions form { display:flex; gap:4px; margin:0; }
+  .actions input[type=number] { width:70px; padding:5px 7px; font-size:13px; }
+  .scroll { overflow-x:auto; }
+  @media (max-width: 760px) {
+    thead { display:none; }
+    tr { display:grid; padding:10px 0; border-bottom:1px solid var(--border); }
+    td { border:0; padding:3px 0; }
+  }
+</style>
+{% endblock %}
+{% block body %}
+<div class="bar">
+  <h1>Accounts</h1>
+  <form method="get" class="actions"><input name="q" value="{{ q }}" placeholder="Search email or name"><button class="btn small">Search</button></form>
+  <form method="post" action="{{ url_for('admin.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn small">Log out</button></form>
+</div>
+<div class="card scroll">
+<table>
+  <thead><tr><th>Account</th><th>Status</th><th>Access until (UTC)</th><th>Codes / scans</th><th>Signed up</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for u in users %}{% set r = u.row %}
+    <tr>
+      <td><strong>{{ r.email }}</strong>{% if r.name %}<br><span class="muted">{{ r.name }}</span>{% endif %}{% if r.is_admin %} <span class="muted">· admin</span>{% endif %}</td>
+      <td>{% if r.disabled %}<span class="bad">Disabled</span>{% elif u.active %}<span class="ok">Active</span> <span class="muted">{{ u.days_left }} day{{ '' if u.days_left == 1 else 's' }} left</span>{% else %}<span class="bad">Expired</span>{% endif %}</td>
+      <td>{{ u.until.strftime('%d %b %Y %H:%M') }}</td>
+      <td>{{ r.code_count }} / {{ r.scan_count }}</td>
+      <td>{{ r.created_at[:10] }}</td>
+      <td>
+        <div class="actions">
+          <form method="post" action="{{ url_for('admin.update_user', user_id=r.id, q=q) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="extend">
+            <input type="number" name="days" value="30" min="1" max="36500" aria-label="Days">
+            <button class="btn small primary">+ days</button>
+          </form>
+          {% for days, label in [(7, '+7'), (365, '+1 yr')] %}
+          <form method="post" action="{{ url_for('admin.update_user', user_id=r.id, q=q) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="extend"><input type="hidden" name="days" value="{{ days }}">
+            <button class="btn small">{{ label }}</button>
+          </form>
+          {% endfor %}
+          {% if u.active %}
+          <form method="post" action="{{ url_for('admin.update_user', user_id=r.id, q=q) }}" onsubmit="return confirm('End access now? Their QR codes will stop working.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="end">
+            <button class="btn small">End now</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('admin.update_user', user_id=r.id, q=q) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="{{ 'enable' if r.disabled else 'disable' }}">
+            <button class="btn small">{{ 'Enable' if r.disabled else 'Disable' }}</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">No accounts{% if q %} match “{{ q }}”{% endif %}.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}
