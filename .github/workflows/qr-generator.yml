@@ -1,17 +1,33 @@
-name: QR Generator Android
+name: QR Generator
 
 on:
   push:
     paths:
       - 'qr-generator/**'
-      - '.github/workflows/qr-android.yml'
+      - '.github/workflows/qr-generator.yml'
   workflow_dispatch:
 
 jobs:
+  server-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: qr-generator/server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
+
   build:
     runs-on: ubuntu-latest
     env:
       KEYSTORE_B64: ${{ secrets.QR_KEYSTORE_BASE64 }}
+      # Your server's address, baked into the app. Set it under
+      # Settings -> Secrets and variables -> Actions -> Variables.
+      QR_SERVER_URL: ${{ vars.QR_SERVER_URL }}
     defaults:
       run:
         working-directory: qr-generator/android

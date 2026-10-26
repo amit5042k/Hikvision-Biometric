@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Offline</title>
+  <style>
+    :root { --bg:#f6f7fb; --text:#111827; --muted:#6b7280; --accent:#4f46e5; --accent-text:#fff; color-scheme: light dark; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#0f1117; --text:#e5e7eb; --muted:#9ca3af; --accent:#818cf8; --accent-text:#0f1117; } }
+    body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; text-align:center;
+           background:var(--bg); color:var(--text); font:16px/1.5 system-ui,sans-serif; padding:24px; box-sizing:border-box; }
+    h1 { font-size:20px; margin:0 0 8px; }
+    p { color:var(--muted); margin:0 0 20px; }
+    button { font:inherit; font-weight:600; border:0; border-radius:10px; padding:12px 28px; background:var(--accent); color:var(--accent-text); }
+  </style>
+</head>
+<body>
+  <div>
+    <h1>You're offline</h1>
+    <p>QR Generator needs an internet connection to create and manage your QR codes.</p>
+    <button type="button" onclick="AndroidBridge.retry()">Try again</button>
+  </div>
+</body>
+</html>

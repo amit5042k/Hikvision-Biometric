@@ -1,84 +1,59 @@
-/* QR Generator — runs fully client-side. Used by the website and bundled into the Android app. */
+/* QR Generator web client. Served by the QR Generator server (qr-generator/server) and
+   shown inside the Android app. Every QR code encodes a short link on the server, so
+   codes keep working only while the owner's account (7-day free trial) is active. */
 (function () {
   'use strict';
 
   qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
 
-  var form = document.getElementById('form');
-  var canvas = document.getElementById('qr');
-  var statusEl = document.getElementById('status');
-  var tabs = document.getElementById('tabs');
-  var logoInput = document.getElementById('logoInput');
-  var removeLogoBtn = document.getElementById('removeLogo');
-  var historyList = document.getElementById('historyList');
-  var actionButtons = ['downloadPng', 'downloadSvg', 'copyImg', 'shareImg'].map(function (id) {
-    return document.getElementById(id);
-  });
+  var $ = function (id) { return document.getElementById(id); };
+  var form = $('form');
+  var design = $('designForm');
+  var canvas = $('qr');
+  var statusEl = $('status');
+  var tabs = $('tabs');
+  var logoInput = $('logoInput');
+  var removeLogoBtn = $('removeLogo');
+  var codeList = $('codeList');
+  var actionButtons = ['downloadPng', 'downloadSvg', 'copyImg', 'shareImg'].map($);
 
   // Present only inside the Android app (see MainActivity.java).
   var android = window.AndroidBridge || null;
 
-  var state = { type: 'url', logo: null, logoDataUrl: null, payload: '', model: null };
+  var TOKEN_KEY = 'qrgen.token';
+  var state = {
+    token: null, account: null, codes: [],
+    current: null,            // the saved code being shown/edited, or null for a new one
+    type: 'url', logo: null, logoDataUrl: null, model: null
+  };
 
-  // ---------------------------------------------------------------- payloads
+  // ---------------------------------------------------------------- server API
 
-  function v(name) {
-    var el = form.elements[name];
-    return el ? (el.type === 'checkbox' ? el.checked : el.value.trim()) : '';
+  function api(method, path, body) {
+    var headers = { 'Accept': 'application/json' };
+    if (body) headers['Content-Type'] = 'application/json';
+    if (state.token) headers.Authorization = 'Bearer ' + state.token;
+    return fetch(path, { method: method, headers: headers, body: body ? JSON.stringify(body) : undefined })
+      .catch(function () { throw new Error('Can’t reach the server. Check your internet connection.'); })
+      .then(function (resp) {
+        return resp.json().catch(function () { return {}; }).then(function (json) {
+          if (resp.status === 401 && state.token) signedOut();
+          if (!resp.ok) throw new Error(json.error || 'Something went wrong (' + resp.status + ').');
+          return json;
+        });
+      });
   }
 
-  function escWifi(s) { return s.replace(/([\\;,:"])/g, '\\$1'); }
-  function escVcard(s) { return s.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/([,;])/g, '\\$1'); }
+  function saveToken(token) {
+    state.token = token;
+    try {
+      if (token) localStorage.setItem(TOKEN_KEY, token); else localStorage.removeItem(TOKEN_KEY);
+    } catch (e) { /* storage unavailable: stay logged in for this visit only */ }
+  }
 
-  var builders = {
-    url: function () {
-      var u = v('url');
-      if (u && !/^[a-z][a-z0-9+.-]*:/i.test(u)) u = 'https://' + u;
-      return u;
-    },
-    text: function () { return form.elements.text.value; },
-    wifi: function () {
-      var ssid = v('ssid');
-      if (!ssid) return '';
-      var sec = v('security');
-      var s = 'WIFI:T:' + sec + ';S:' + escWifi(ssid) + ';';
-      if (sec !== 'nopass') s += 'P:' + escWifi(form.elements.wifiPassword.value) + ';';
-      if (v('hidden')) s += 'H:true;';
-      return s + ';';
-    },
-    vcard: function () {
-      var first = v('firstName'), last = v('lastName');
-      if (!(first || last || v('vPhone') || v('vEmail') || v('org'))) return '';
-      var lines = ['BEGIN:VCARD', 'VERSION:3.0',
-        'N:' + escVcard(last) + ';' + escVcard(first) + ';;;',
-        'FN:' + escVcard((first + ' ' + last).trim() || v('org'))];
-      if (v('org')) lines.push('ORG:' + escVcard(v('org')));
-      if (v('title')) lines.push('TITLE:' + escVcard(v('title')));
-      if (v('vPhone')) lines.push('TEL;TYPE=CELL:' + escVcard(v('vPhone')));
-      if (v('vEmail')) lines.push('EMAIL:' + escVcard(v('vEmail')));
-      if (v('vUrl')) lines.push('URL:' + escVcard(v('vUrl')));
-      if (v('address')) lines.push('ADR:;;' + escVcard(v('address')) + ';;;;');
-      lines.push('END:VCARD');
-      return lines.join('\r\n');
-    },
-    email: function () {
-      var to = v('emailTo');
-      if (!to) return '';
-      var q = [];
-      if (v('emailSubject')) q.push('subject=' + encodeURIComponent(v('emailSubject')));
-      if (form.elements.emailBody.value) q.push('body=' + encodeURIComponent(form.elements.emailBody.value));
-      return 'mailto:' + to + (q.length ? '?' + q.join('&') : '');
-    },
-    sms: function () {
-      var n = v('smsNumber').replace(/[^\d+]/g, '');
-      if (!n) return '';
-      return 'SMSTO:' + n + ':' + form.elements.smsBody.value;
-    },
-    phone: function () {
-      var n = v('phone').replace(/[^\d+]/g, '');
-      return n ? 'tel:' + n : '';
-    }
-  };
+  function loadToken() {
+    try { return localStorage.getItem(TOKEN_KEY); } catch (e) { return null; }
+  }
 
   // ---------------------------------------------------------------- QR model
 
@@ -149,12 +124,12 @@
 
   function readOptions() {
     return {
-      fg: form.elements.fg.value,
-      bg: form.elements.bg.value,
-      style: form.elements.style.value,
-      ecl: form.elements.ecl.value,
-      size: parseInt(form.elements.size.value, 10),
-      margin: parseInt(form.elements.margin.value, 10)
+      fg: design.elements.fg.value,
+      bg: design.elements.bg.value,
+      style: design.elements.style.value,
+      ecl: design.elements.ecl.value,
+      size: parseInt(design.elements.size.value, 10),
+      margin: parseInt(design.elements.margin.value, 10)
     };
   }
 
@@ -206,7 +181,208 @@
     return out + '</svg>';
   }
 
-  // ---------------------------------------------------------------- status
+  // ---------------------------------------------------------------- account views
+
+  var authMode = 'register';
+
+  function setAuthMode(mode) {
+    authMode = mode;
+    Array.prototype.forEach.call($('authTabs').querySelectorAll('button'), function (b) {
+      b.setAttribute('aria-selected', String(b.dataset.mode === mode));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-only]'), function (el) {
+      el.hidden = el.dataset.only !== mode;
+    });
+    $('authForm').elements.password.autocomplete = mode === 'register' ? 'new-password' : 'current-password';
+    $('authSubmit').textContent = mode === 'register' ? 'Start free trial' : 'Log in';
+    $('authError').textContent = '';
+  }
+
+  function showAuth() {
+    $('authView').hidden = false;
+    $('appView').hidden = true;
+    $('accountBar').hidden = true;
+  }
+
+  function signedOut() {
+    saveToken(null);
+    state.account = null;
+    state.codes = [];
+    resetEditor();
+    showAuth();
+  }
+
+  function formatDate(iso) {
+    return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  function showAccount(account) {
+    state.account = account;
+    $('authView').hidden = true;
+    $('appView').hidden = false;
+    $('accountBar').hidden = false;
+    $('accountEmail').textContent = account.email;
+
+    var badge = $('trialBadge'), banner = $('expiredBanner');
+    var msLeft = new Date(account.access_until) - Date.now();
+    var days = Math.ceil(msLeft / 86400000);
+    badge.className = 'badge';
+    if (account.active) {
+      if (days > 30) {
+        badge.textContent = 'Active until ' + formatDate(account.access_until);
+      } else {
+        badge.textContent = days <= 1 ? 'Last day of trial' : days + ' days left';
+        if (days <= 2) badge.classList.add('warn');
+      }
+      banner.hidden = true;
+    } else {
+      badge.textContent = account.disabled ? 'Disabled' : 'Expired';
+      badge.classList.add('bad');
+      banner.textContent = (account.disabled ? 'Your account is disabled. ' :
+        'Your free trial ended on ' + formatDate(account.access_until) + '. ') +
+        'Your QR codes have stopped working. ' + account.contact;
+      banner.hidden = false;
+    }
+    $('saveBtn').disabled = !account.active;
+  }
+
+  function refreshAccount() {
+    return api('GET', '/api/me').then(function (r) { showAccount(r.account); });
+  }
+
+  function loadCodes() {
+    return api('GET', '/api/codes').then(function (r) {
+      state.codes = r.codes;
+      renderCodeList();
+    });
+  }
+
+  // ---------------------------------------------------------------- editor
+
+  function fieldsFor(type) {
+    return document.querySelector('.fields[data-for="' + type + '"]');
+  }
+
+  function collectData() {
+    var data = {};
+    Array.prototype.forEach.call(fieldsFor(state.type).querySelectorAll('[name]'), function (el) {
+      data[el.name] = el.type === 'checkbox' ? el.checked : el.value;
+    });
+    return data;
+  }
+
+  function selectType(type) {
+    state.type = type;
+    Array.prototype.forEach.call(tabs.querySelectorAll('button'), function (b) {
+      b.setAttribute('aria-selected', String(b.dataset.type === type));
+    });
+    Array.prototype.forEach.call(form.querySelectorAll('.fields[data-for]'), function (f) {
+      f.hidden = f.dataset.for !== type;
+    });
+  }
+
+  function clearFields() {
+    Array.prototype.forEach.call(form.querySelectorAll('[name]'), function (el) {
+      if (el.type === 'checkbox') el.checked = false;
+      else if (el.tagName === 'SELECT') el.selectedIndex = 0;
+      else el.value = '';
+    });
+  }
+
+  function resetEditor() {
+    state.current = null;
+    clearFields();
+    selectType('url');
+    syncEditor();
+    renderCodeList();
+    scheduleRender();
+  }
+
+  function openCode(code) {
+    state.current = code;
+    clearFields();
+    selectType(code.type);
+    Object.keys(code.data).forEach(function (k) {
+      var el = form.elements[k];
+      if (!el) return;
+      if (el.type === 'checkbox') el.checked = !!code.data[k]; else el.value = code.data[k];
+    });
+    form.elements.label.value = code.label;
+    syncEditor();
+    renderCodeList();
+    scheduleRender();
+  }
+
+  function syncEditor() {
+    var editing = !!state.current;
+    $('editorTitle').textContent = editing ? 'Edit QR code' : 'New QR code';
+    $('saveBtn').textContent = editing ? 'Save changes' : 'Create QR code';
+    $('newCodeBtn').hidden = !editing;
+    $('deleteBtn').hidden = !editing;
+    $('saveError').textContent = '';
+  }
+
+  function saveCode(e) {
+    e.preventDefault();
+    var btn = $('saveBtn');
+    var body = { type: state.type, data: collectData(), label: form.elements.label.value };
+    var editing = state.current;
+    btn.disabled = true;
+    $('saveError').textContent = '';
+    api(editing ? 'PUT' : 'POST', editing ? '/api/codes/' + editing.id : '/api/codes', body)
+      .then(function (r) {
+        state.codes = [r.code].concat(state.codes.filter(function (c) { return c.id !== r.code.id; }));
+        openCode(r.code);
+        setStatus(editing ? 'Saved. Printed copies of this code now show the new content.' : 'QR code created.');
+      })
+      .catch(function (err) {
+        $('saveError').textContent = err.message;
+        if (/trial has ended/.test(err.message)) refreshAccount().catch(function () {});
+      })
+      .then(function () { btn.disabled = !(state.account && state.account.active); });
+  }
+
+  function deleteCode() {
+    var code = state.current;
+    if (!code || !confirm('Delete “' + code.label + '”? Printed copies of this QR code will stop working.')) return;
+    api('DELETE', '/api/codes/' + code.id).then(function () {
+      state.codes = state.codes.filter(function (c) { return c.id !== code.id; });
+      resetEditor();
+      setStatus('QR code deleted.');
+    }, function (err) { $('saveError').textContent = err.message; });
+  }
+
+  var TYPE_NAMES = { url: 'Link', text: 'Text', wifi: 'Wi-Fi', vcard: 'Contact', email: 'Email', sms: 'SMS', phone: 'Phone' };
+
+  function renderCodeList() {
+    codeList.textContent = '';
+    if (!state.codes.length) {
+      var empty = document.createElement('li');
+      empty.className = 'empty';
+      empty.textContent = 'Codes you create appear here. You can edit them any time — the printed code stays the same.';
+      codeList.appendChild(empty);
+      return;
+    }
+    state.codes.forEach(function (code) {
+      var li = document.createElement('li'), b = document.createElement('button');
+      var name = document.createElement('span'), scans = document.createElement('span'), meta = document.createElement('span');
+      b.type = 'button';
+      name.className = 'name';
+      name.textContent = code.label;
+      scans.className = 'scans';
+      scans.textContent = code.scans + (code.scans === 1 ? ' scan' : ' scans');
+      meta.className = 'meta';
+      meta.textContent = TYPE_NAMES[code.type] + ' · created ' + formatDate(code.created_at);
+      b.appendChild(name);
+      b.appendChild(scans);
+      b.appendChild(meta);
+      b.setAttribute('aria-current', String(!!state.current && state.current.id === code.id));
+      b.addEventListener('click', function () { openCode(code); });
+      li.appendChild(b);
+      codeList.appendChild(li);
+    });
+  }
+
 
   function setStatus(msg, isError) {
     statusEl.textContent = msg || '';
@@ -221,7 +397,7 @@
     }).reduce(function (s, c, i) { return s + c * [0.2126, 0.7152, 0.0722][i]; }, 0);
   }
 
-  // ---------------------------------------------------------------- update loop
+  // ---------------------------------------------------------------- preview
 
   var pending = 0;
   function scheduleRender() {
@@ -231,43 +407,49 @@
 
   function render() {
     var o = readOptions();
-    document.getElementById('sizeOut').textContent = o.size + ' px';
-    document.getElementById('marginOut').textContent = o.margin;
+    $('sizeOut').textContent = o.size + ' px';
+    $('marginOut').textContent = o.margin;
 
-    var payload = builders[state.type]();
-    state.payload = payload;
+    var code = state.current, link = $('shortLink');
     state.model = null;
-    if (!payload) {
+    $('placeholder').hidden = !!code;
+    link.hidden = !code;
+    if (!code) {
       var ctx = canvas.getContext('2d');
       canvas.width = canvas.height = 256;
       ctx.fillStyle = o.bg;
       ctx.fillRect(0, 0, 256, 256);
-      setStatus('Fill in the fields to create your QR code.');
+      setStatus('');
       toggleActions(false);
       return;
     }
+
+    link.textContent = '';
+    var a = document.createElement('a');
+    a.href = code.short_url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = code.short_url;
+    link.appendChild(document.createTextNode('Opens: '));
+    link.appendChild(a);
 
     // A logo hides part of the code, so require at least Quartile correction.
     var ecl = o.ecl;
     if (state.logo && ECL_ORDER.indexOf(ecl) < 2) ecl = 'H';
-    try {
-      state.model = makeModel(payload, ecl);
-    } catch (e) {
-      setStatus('Too much data for a QR code. Shorten the content or lower error correction.', true);
-      toggleActions(false);
-      return;
-    }
+    state.model = makeModel(code.short_url, ecl);
     drawCanvas(canvas, state.model, o);
     toggleActions(true);
 
-    var n = state.model.length;
-    var notes = ['Version ' + ((n - 17) / 4) + ' · ' + n + '×' + n + ' modules · ' + ecl + ' correction'];
-    if (ecl !== o.ecl) notes.push('raised to High for the logo');
-    var lf = luminance(o.fg), lb = luminance(o.bg), warn = true;
-    if (lf > lb) notes.push('light-on-dark codes may not scan in every app');
-    else if ((lb + 0.05) / (lf + 0.05) < 3) notes.push('low contrast may not scan reliably');
+    var notes = [], warn = true;
+    if (ecl !== o.ecl) notes.push('Error correction raised to High for the logo');
+    var lf = luminance(o.fg), lb = luminance(o.bg);
+    if (state.account && !state.account.active) notes.push('This code is not working right now — your trial has ended');
+    else if (lf > lb) notes.push('Light-on-dark codes may not scan in every app');
+    else if ((lb + 0.05) / (lf + 0.05) < 3) notes.push('Low contrast may not scan reliably');
     else warn = false;
-    setStatus(notes.join(' — '), warn);
+    if (notes.length) setStatus(notes.join(' — '), warn);
+    else if (/^QR code (created|deleted)|^Saved/.test(statusEl.textContent)) { /* keep the save message */ }
+    else setStatus('');
   }
 
   function toggleActions(on) {
@@ -277,9 +459,9 @@
   // ---------------------------------------------------------------- export
 
   function fileBase() {
-    var slug = (state.type + '-' + state.payload.replace(/^[a-z]+:(\/\/)?/i, ''))
+    var slug = (state.current ? state.current.label : 'code')
       .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
-    return 'qr-' + (slug || 'code');
+    return 'qr-' + (slug || state.current.slug);
   }
 
   function exportCanvas() {
@@ -308,12 +490,8 @@
   function downloadPng() {
     if (!state.model) return;
     var c = exportCanvas(), name = fileBase() + '.png';
-    if (android) {
-      android.saveFile(c.toDataURL('image/png').split(',')[1], 'image/png', name);
-    } else {
-      canvasBlob(c).then(function (b) { saveBlob(b, name); });
-    }
-    remember();
+    if (android) android.saveFile(c.toDataURL('image/png').split(',')[1], 'image/png', name);
+    else canvasBlob(c).then(function (b) { saveBlob(b, name); });
   }
 
   function downloadSvg() {
@@ -321,7 +499,6 @@
     var svg = buildSvg(state.model, readOptions()), name = fileBase() + '.svg';
     if (android) android.saveFile(toBase64(svg), 'image/svg+xml', name);
     else saveBlob(new Blob([svg], { type: 'image/svg+xml' }), name);
-    remember();
   }
 
   function copyImage() {
@@ -332,7 +509,7 @@
     }
     // Pass the promise directly so Safari keeps the user-gesture context.
     navigator.clipboard.write([new ClipboardItem({ 'image/png': canvasBlob(exportCanvas()) })])
-      .then(function () { setStatus('Copied to clipboard.'); remember(); },
+      .then(function () { setStatus('Copied to clipboard.'); },
         function () { setStatus('Could not copy — use Download instead.', true); });
   }
 
@@ -341,100 +518,59 @@
     var c = exportCanvas(), name = fileBase() + '.png';
     if (android) {
       android.shareImage(c.toDataURL('image/png').split(',')[1], name);
-      remember();
       return;
     }
     canvasBlob(c).then(function (blob) {
       var file = new File([blob], name, { type: 'image/png' });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        return navigator.share({ files: [file], title: 'QR code' }).then(remember, function () {});
+        return navigator.share({ files: [file], title: 'QR code' }).catch(function () {});
       }
       saveBlob(blob, name);
       setStatus('Sharing is not supported here, so the image was downloaded instead.');
     });
   }
 
-  // ---------------------------------------------------------------- history
-
-  var HISTORY_KEY = 'qrgen.history.v1';
-
-  function loadHistory() {
-    try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch (e) { return []; }
-  }
-
-  function snapshot() {
-    var data = {};
-    var fields = document.querySelector('.fields[data-for="' + state.type + '"]');
-    Array.prototype.forEach.call(fields.querySelectorAll('[name]'), function (el) {
-      data[el.name] = el.type === 'checkbox' ? el.checked : el.value;
-    });
-    return { type: state.type, data: data, label: state.payload.split(/\r?\n/)[0].slice(0, 80), t: Date.now() };
-  }
-
-  function remember() {
-    var entry = snapshot();
-    var list = loadHistory().filter(function (h) {
-      return !(h.type === entry.type && JSON.stringify(h.data) === JSON.stringify(entry.data));
-    });
-    list.unshift(entry);
-    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 12))); } catch (e) { /* storage unavailable */ }
-    renderHistory();
-  }
-
-  function renderHistory() {
-    var list = loadHistory();
-    historyList.textContent = '';
-    if (!list.length) {
-      var li = document.createElement('li');
-      li.textContent = 'Codes you download or share appear here.';
-      li.style.color = 'var(--muted)';
-      li.style.fontSize = '13px';
-      historyList.appendChild(li);
-    }
-    list.forEach(function (h) {
-      var li = document.createElement('li'), b = document.createElement('button'), s = document.createElement('small');
-      b.type = 'button';
-      s.textContent = h.type;
-      b.appendChild(s);
-      b.appendChild(document.createTextNode(h.label));
-      b.title = h.label;
-      b.addEventListener('click', function () {
-        selectType(h.type);
-        Object.keys(h.data).forEach(function (k) {
-          var el = form.elements[k];
-          if (!el) return;
-          if (el.type === 'checkbox') el.checked = h.data[k]; else el.value = h.data[k];
-        });
-        scheduleRender();
-      });
-      li.appendChild(b);
-      historyList.appendChild(li);
-    });
-    document.getElementById('clearHistory').hidden = !list.length;
-  }
-
   // ---------------------------------------------------------------- wiring
 
-  function selectType(type) {
-    state.type = type;
-    Array.prototype.forEach.call(tabs.querySelectorAll('button'), function (b) {
-      b.setAttribute('aria-selected', String(b.dataset.type === type));
-    });
-    Array.prototype.forEach.call(document.querySelectorAll('.fields'), function (f) {
-      f.hidden = f.dataset.for !== type;
-    });
-  }
+  $('authTabs').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-mode]');
+    if (b) setAuthMode(b.dataset.mode);
+  });
+
+  $('authForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target, btn = $('authSubmit');
+    var body = { email: f.elements.email.value, password: f.elements.password.value, name: f.elements.name.value };
+    btn.disabled = true;
+    $('authError').textContent = '';
+    api('POST', authMode === 'register' ? '/api/register' : '/api/login', body)
+      .then(function (r) {
+        saveToken(r.token);
+        f.elements.password.value = '';
+        showAccount(r.account);
+        resetEditor();
+        return loadCodes();
+      })
+      .catch(function (err) { $('authError').textContent = err.message; })
+      .then(function () { btn.disabled = false; });
+  });
+
+  $('logoutBtn').addEventListener('click', function () {
+    api('POST', '/api/logout').catch(function () {}).then(signedOut);
+  });
 
   tabs.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-type]');
     if (!b) return;
     selectType(b.dataset.type);
-    scheduleRender();
   });
 
-  form.addEventListener('input', scheduleRender);
-  form.addEventListener('change', scheduleRender);
-  form.addEventListener('submit', function (e) { e.preventDefault(); });
+  form.addEventListener('submit', saveCode);
+  $('deleteBtn').addEventListener('click', deleteCode);
+  $('newCodeBtn').addEventListener('click', function () { resetEditor(); setStatus(''); });
+  design.addEventListener('input', scheduleRender);
+  design.addEventListener('change', scheduleRender);
+  design.addEventListener('submit', function (e) { e.preventDefault(); });
 
   logoInput.addEventListener('change', function () {
     var file = logoInput.files && logoInput.files[0];
@@ -461,38 +597,51 @@
     scheduleRender();
   });
 
-  document.getElementById('downloadPng').addEventListener('click', downloadPng);
-  document.getElementById('downloadSvg').addEventListener('click', downloadSvg);
-  document.getElementById('copyImg').addEventListener('click', copyImage);
-  document.getElementById('shareImg').addEventListener('click', shareImage);
-  document.getElementById('clearHistory').addEventListener('click', function () {
-    try { localStorage.removeItem(HISTORY_KEY); } catch (e) { /* storage unavailable */ }
-    renderHistory();
-  });
+  $('downloadPng').addEventListener('click', downloadPng);
+  $('downloadSvg').addEventListener('click', downloadSvg);
+  $('copyImg').addEventListener('click', copyImage);
+  $('shareImg').addEventListener('click', shareImage);
 
   // The Android app saves and shares natively; hide Copy there (WebView has no image clipboard).
-  if (android) document.getElementById('copyImg').hidden = true;
-
-  // Offline support for the website (service workers don't run from file:// in the app).
-  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
-    navigator.serviceWorker.register('sw.js').catch(function () {});
-  }
+  if (android) $('copyImg').hidden = true;
 
   // Prefill from outside — the Android app calls this with text shared from other apps.
   function fill(text) {
     text = String(text || '').trim();
+    resetEditor();
     if (/^https?:\/\/\S+$/i.test(text)) {
-      selectType('url');
       form.elements.url.value = text;
     } else {
       selectType('text');
       form.elements.text.value = text;
     }
-    scheduleRender();
   }
 
-  window.QRGen = { builders: builders, makeModel: makeModel, buildSvg: buildSvg, select: selectType, fill: fill };
+  window.QRGen = { makeModel: makeModel, buildSvg: buildSvg, fill: fill };
 
-  renderHistory();
-  render();
+  // ---------------------------------------------------------------- start
+
+  setAuthMode('register');
+  resetEditor();
+  state.token = loadToken();
+  if (state.token) {
+    refreshAccount().then(loadCodes).catch(function (err) {
+      if (!state.token) return;  // token was rejected; signedOut() already showed the login form
+      // Still logged in but the server is unreachable: show the error with a way to retry.
+      $('authView').hidden = true;
+      $('appView').hidden = false;
+      $('saveBtn').disabled = true;
+      var banner = $('expiredBanner');
+      banner.textContent = err.message + ' ';
+      var retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'link';
+      retry.textContent = 'Retry';
+      retry.addEventListener('click', function () { location.reload(); });
+      banner.appendChild(retry);
+      banner.hidden = false;
+    });
+  } else {
+    showAuth();
+  }
 })();

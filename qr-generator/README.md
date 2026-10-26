@@ -1,74 +1,118 @@
-# QR Generator — website + Android app
+# QR Generator — website, Android app and server
 
-A free, private QR code generator. Everything runs on the device; nothing is uploaded.
+People sign up with email + password and get a **7-day free trial**. Every QR code they make
+is a short link on your server (`https://qr.yourdomain.com/r/Ab3xY9k`), so:
 
-- **Content types:** link, plain text, Wi-Fi login, contact card (vCard), email, SMS, phone number
-- **Design:** foreground/background colours, square / rounded / dot styles, error-correction level,
-  size (128–2048 px), quiet zone, optional centre logo (error correction is raised to High automatically)
-- **Export:** PNG, SVG (vector, for print), copy to clipboard, share
-- **Extras:** recent codes history, dark mode, works offline (installable PWA)
+- codes **stop scanning when the trial ends**. Scanners see "This QR code has expired" plus your contact text;
+- you **extend an account from the admin page** and all of its printed codes work again immediately;
+- users can **edit a code's content later without reprinting it**, and see how many times each code was scanned.
+
+Code types: link, text, Wi-Fi, contact (vCard), email, SMS, phone. Links redirect straight to the
+website; the others open a small page (copy text, save contact, Wi-Fi name + password, call/SMS/email button).
+Design options: colours, square/rounded/dot style, error correction, size, quiet zone, centre logo,
+PNG/SVG download, copy, share.
 
 ```
 qr-generator/
-├── web/        the website (plain HTML/CSS/JS, no build step)
-└── android/    Android app — a native shell that bundles web/ and adds
-                gallery saving, the share sheet and "Share → QR Generator"
+├── server/     Flask + SQLite: accounts, trial, short links, admin page (also serves web/)
+├── web/        the website (plain HTML/CSS/JS)
+├── android/    Android app: opens your server's website, adds gallery saving and the share sheet
+└── Dockerfile  runs server + website
 ```
 
-There is one copy of the UI: the Android build packages `web/` directly as app assets,
-so any change to the website ships in the next app build too.
+## 1. Run the server
 
-## Website
+You need a host with a domain and HTTPS. Any of these work: a VPS with Docker, Render, Railway or Fly.io.
+SQLite needs a **persistent disk/volume** for the data folder.
 
-It is a static site — upload the contents of `qr-generator/web/` to any web host
-(GoDaddy cPanel File Manager, Netlify drop, GitHub Pages, …). No server code or database.
-
-- Serve it over **HTTPS** so the offline mode / "Install app" prompt works.
-- When you change a file, bump `CACHE` in `web/sw.js` (e.g. `qrgen-v2`) so returning visitors
-  get the new version.
-
-Try it locally:
+### With Docker
 
 ```bash
-cd qr-generator/web
-python3 -m http.server 8000   # then open http://localhost:8000
+docker build -t qr-generator qr-generator
+docker run -d --name qr -p 8000:8000 -v qrdata:/data \
+  -e ADMIN_EMAIL=you@example.com -e ADMIN_PASSWORD='choose-a-strong-one' \
+  -e CONTACT_TEXT='WhatsApp +91 98765 43210 to extend your account.' \
+  -e HTTPS_ONLY=1 \
+  qr-generator
 ```
 
-## Android app
+Put it behind HTTPS (Caddy, nginx, or your platform's built-in TLS) at e.g. `https://qr.yourdomain.com`.
 
-**Get an APK without installing anything:** every push that touches `qr-generator/` runs the
-*QR Generator Android* GitHub Action. Open the run under the repo's **Actions** tab and download
-the `qr-generator-apk` artifact. `app-debug.apk` inside can be installed on any phone
-(allow "Install unknown apps" when prompted).
-
-**Build locally:** open `qr-generator/android` in Android Studio and press Run, or:
+### Without Docker
 
 ```bash
-cd qr-generator/android
-./gradlew assembleDebug          # → app/build/outputs/apk/debug/app-debug.apk
+cd qr-generator/server
+pip install -r requirements.txt
+ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='...' python run.py     # http://0.0.0.0:8000
 ```
 
-Requires JDK 17 and the Android SDK (Android Studio installs both).
+### Settings (environment variables)
 
-App details: Android 8.0+ (minSdk 26), targets Android 15 (API 35). Saved PNGs go to
-`Pictures/QR Generator`, SVGs to `Download/QR Generator`. Sharing a link or text from another
-app to **QR Generator** opens it pre-filled.
+| Variable | Default | Purpose |
+|---|---|---|
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | — | Creates the first admin account on start-up (only if it doesn't exist yet). |
+| `CONTACT_TEXT` | "Contact the administrator…" | Shown to expired users and on expired-code pages. Put your WhatsApp/phone here. |
+| `TRIAL_DAYS` | `7` | Length of the free trial for new sign-ups. |
+| `QR_DATA_DIR` | `server/data` (`/data` in Docker) | Database (`qr.db`) and secret key. **Back this folder up.** |
+| `PUBLIC_URL` | address of the request | Force the base of short links, e.g. `https://qr.yourdomain.com`. |
+| `BEHIND_PROXY` | off (`1` in Docker) | Trust `X-Forwarded-*` from your HTTPS proxy so short links use `https://`. |
+| `HTTPS_ONLY` | off | Secure-only admin session cookie. Turn on once you're on HTTPS. |
+| `PORT`, `HOST` | `8000`, `0.0.0.0` | Where to listen. |
 
-### Publishing a signed release (Play Store)
+Pick your domain before users print codes: the short links contain it, so changing it later breaks printed codes.
 
-1. Create an upload key once and keep it safe — losing it means you can't update the app:
-   ```bash
-   keytool -genkeypair -v -keystore release.jks -alias qr -keyalg RSA -keysize 2048 -validity 10000
-   ```
-2. In GitHub → Settings → Secrets and variables → Actions, add:
-   `QR_KEYSTORE_BASE64` (output of `base64 -w0 release.jks`), `QR_KEYSTORE_PASSWORD`,
+## 2. Admin page
+
+Open `https://qr.yourdomain.com/admin` and log in with the admin account. For each account you see
+status, days left, number of codes and scans, and buttons to:
+
+- **+ days / +7 / +1 yr**: extend access (counted from today if expired, otherwise added to the remaining time);
+- **End now**: stop access and the account's codes immediately;
+- **Disable / Enable**: block the account and log it out everywhere.
+
+Another admin: `cd server && flask --app qrserver create-admin other@example.com`.
+
+## 3. Website
+
+The server serves it at `https://qr.yourdomain.com/`. Nothing else to deploy.
+
+## 4. Android app
+
+The app opens your server's website, so it must know the address.
+
+1. In GitHub → **Settings → Secrets and variables → Actions → Variables**, add
+   `QR_SERVER_URL` = `https://qr.yourdomain.com`.
+2. Push any change under `qr-generator/` (or run the **QR Generator** workflow manually from the Actions tab).
+3. Download the `qr-generator-apk` artifact from the run. `app-debug.apk` installs on any phone
+   (allow "Install unknown apps").
+
+Build locally instead: `cd qr-generator/android && ./gradlew assembleDebug -PqrServerUrl=https://qr.yourdomain.com`
+(JDK 17 + Android SDK, or just open the folder in Android Studio). For the emulator against a local server:
+`-PqrServerUrl=http://10.0.2.2:8000`.
+
+The app supports Android 8.0+ and saves PNGs to `Pictures/QR Generator` and SVGs to `Download/QR Generator`.
+Sharing a link or text from another app to **QR Generator** pre-fills a new code. Short links open in the
+browser, the same way they do for anyone who scans them.
+
+### Signed release for the Play Store
+
+1. Create an upload key once and keep it safe:
+   `keytool -genkeypair -v -keystore release.jks -alias qr -keyalg RSA -keysize 2048 -validity 10000`
+2. Add the Actions secrets `QR_KEYSTORE_BASE64` (`base64 -w0 release.jks`), `QR_KEYSTORE_PASSWORD`,
    `QR_KEY_ALIAS` (`qr`), `QR_KEY_PASSWORD`.
-3. The next workflow run also produces a signed `app-release.apk` and `app-release.aab`.
-   Upload the `.aab` to Google Play Console.
+3. The next workflow run also produces a signed `app-release.apk` and `app-release.aab`. Upload the `.aab` to Play Console.
 
-Before publishing, consider changing `applicationId` in `android/app/build.gradle`
-(currently `org.mgnurbanestate.qrgenerator`) — it can't be changed after the first Play release —
-and increase `versionCode` for every update.
+Before the first Play release, decide on `applicationId` in `android/app/build.gradle`
+(currently `org.mgnurbanestate.qrgenerator`); it can't change afterwards. Increase `versionCode` for every update.
+
+## Development
+
+```bash
+cd qr-generator/server
+pip install -r requirements-dev.txt
+pytest -q            # API, trial expiry, scanning and admin tests
+python run.py        # then open http://localhost:8000
+```
 
 ## Credits
 

@@ -10,8 +10,19 @@ android {
         applicationId 'org.mgnurbanestate.qrgenerator'
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName '1.0'
+        versionCode 2
+        versionName '1.1'
+
+        // Address of your QR Generator server (qr-generator/server). Set it with
+        //   ./gradlew assembleRelease -PqrServerUrl=https://qr.yourdomain.com
+        // or the QR_SERVER_URL environment variable (used by the GitHub Action).
+        def serverUrl = (project.findProperty('qrServerUrl') ?: System.getenv('QR_SERVER_URL') ?: 'https://qr.example.com')
+                .toString().replaceAll('/+$', '')
+        buildConfigField 'String', 'SERVER_URL', "\"${serverUrl}\""
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     // Release signing is read from environment variables so no secrets live in the repo.
@@ -29,16 +40,14 @@ android {
     }
 
     buildTypes {
+        debug {
+            // allows http:// servers for local testing, e.g. -PqrServerUrl=http://10.0.2.2:8000 on the emulator
+            manifestPlaceholders = [cleartext: 'true']
+        }
         release {
+            manifestPlaceholders = [cleartext: 'false']
             minifyEnabled false
             if (ks) signingConfig signingConfigs.release
-        }
-    }
-
-    // The app ships the website from ../../web, so both always stay in sync.
-    sourceSets {
-        main {
-            assets.srcDirs += ['../../web']
         }
     }
 

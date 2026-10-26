@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>QR Generator</title>
-  <meta name="description" content="Free, private QR code generator. Make QR codes for links, text, Wi-Fi, contacts, email, SMS and phone numbers. Works offline.">
+  <meta name="description" content="Create QR codes for links, text, Wi-Fi, contacts, email, SMS and phone numbers. Edit them any time without reprinting. Free for 7 days.">
   <meta name="theme-color" content="#4f46e5">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
@@ -17,144 +17,197 @@
       <img src="icons/icon.svg" alt="" width="28" height="28">
       <span>QR Generator</span>
     </div>
-    <span class="tagline">Everything stays on your device</span>
+    <div class="account" id="accountBar" hidden>
+      <span id="trialBadge" class="badge"></span>
+      <span id="accountEmail" class="muted"></span>
+      <button type="button" id="logoutBtn" class="link">Log out</button>
+    </div>
   </header>
 
-  <main class="layout">
-    <section class="panel editor" aria-label="QR content">
-      <nav class="tabs" role="tablist" id="tabs">
-        <button role="tab" data-type="url" aria-selected="true">Link</button>
-        <button role="tab" data-type="text">Text</button>
-        <button role="tab" data-type="wifi">Wi-Fi</button>
-        <button role="tab" data-type="vcard">Contact</button>
-        <button role="tab" data-type="email">Email</button>
-        <button role="tab" data-type="sms">SMS</button>
-        <button role="tab" data-type="phone">Phone</button>
+  <!-- Login / sign-up -->
+  <main class="auth" id="authView" hidden>
+    <section class="panel auth-panel">
+      <h1>Free for 7 days</h1>
+      <p class="muted">Create an account to make QR codes for links, Wi-Fi, contacts and more.
+        Your codes keep working during your 7-day free trial.</p>
+      <nav class="tabs" role="tablist" id="authTabs">
+        <button role="tab" data-mode="register" aria-selected="true">Sign up</button>
+        <button role="tab" data-mode="login" aria-selected="false">Log in</button>
       </nav>
-
-      <form id="form" autocomplete="off" novalidate>
-        <div class="fields" data-for="url">
-          <label>Website address
-            <input name="url" type="url" inputmode="url" placeholder="https://example.com" value="https://example.com">
-          </label>
-        </div>
-
-        <div class="fields" data-for="text" hidden>
-          <label>Text
-            <textarea name="text" rows="5" placeholder="Type anything…"></textarea>
-          </label>
-        </div>
-
-        <div class="fields" data-for="wifi" hidden>
-          <label>Network name (SSID)
-            <input name="ssid" placeholder="MyHomeWiFi">
-          </label>
-          <div class="row">
-            <label>Security
-              <select name="security">
-                <option value="WPA">WPA / WPA2 / WPA3</option>
-                <option value="WEP">WEP</option>
-                <option value="nopass">None (open)</option>
-              </select>
-            </label>
-            <label>Password
-              <input name="wifiPassword" type="text" placeholder="Password">
-            </label>
-          </div>
-          <label class="check"><input name="hidden" type="checkbox"> Hidden network</label>
-        </div>
-
-        <div class="fields" data-for="vcard" hidden>
-          <div class="row">
-            <label>First name <input name="firstName"></label>
-            <label>Last name <input name="lastName"></label>
-          </div>
-          <div class="row">
-            <label>Phone <input name="vPhone" type="tel" inputmode="tel"></label>
-            <label>Email <input name="vEmail" type="email" inputmode="email"></label>
-          </div>
-          <div class="row">
-            <label>Company <input name="org"></label>
-            <label>Job title <input name="title"></label>
-          </div>
-          <label>Website <input name="vUrl" type="url" inputmode="url"></label>
-          <label>Address <input name="address"></label>
-        </div>
-
-        <div class="fields" data-for="email" hidden>
-          <label>To <input name="emailTo" type="email" inputmode="email" placeholder="name@example.com"></label>
-          <label>Subject <input name="emailSubject"></label>
-          <label>Message <textarea name="emailBody" rows="3"></textarea></label>
-        </div>
-
-        <div class="fields" data-for="sms" hidden>
-          <label>Phone number <input name="smsNumber" type="tel" inputmode="tel" placeholder="+91 98765 43210"></label>
-          <label>Message <textarea name="smsBody" rows="3"></textarea></label>
-        </div>
-
-        <div class="fields" data-for="phone" hidden>
-          <label>Phone number <input name="phone" type="tel" inputmode="tel" placeholder="+91 98765 43210"></label>
-        </div>
-
-        <details class="design" open>
-          <summary>Design</summary>
-          <div class="row">
-            <label>Foreground <input name="fg" type="color" value="#111827"></label>
-            <label>Background <input name="bg" type="color" value="#ffffff"></label>
-          </div>
-          <div class="row">
-            <label>Style
-              <select name="style">
-                <option value="square">Square</option>
-                <option value="rounded">Rounded</option>
-                <option value="dots">Dots</option>
-              </select>
-            </label>
-            <label>Error correction
-              <select name="ecl">
-                <option value="L">Low (7%)</option>
-                <option value="M" selected>Medium (15%)</option>
-                <option value="Q">Quartile (25%)</option>
-                <option value="H">High (30%)</option>
-              </select>
-            </label>
-          </div>
-          <div class="row">
-            <label>Size <output id="sizeOut">512 px</output>
-              <input name="size" type="range" min="128" max="2048" step="32" value="512">
-            </label>
-            <label>Quiet zone <output id="marginOut">4</output>
-              <input name="margin" type="range" min="0" max="10" step="1" value="4">
-            </label>
-          </div>
-          <div class="logo-row">
-            <label class="file">Center logo
-              <input id="logoInput" type="file" accept="image/*">
-            </label>
-            <button type="button" id="removeLogo" class="link" hidden>Remove logo</button>
-          </div>
-        </details>
+      <form id="authForm" class="fields" novalidate>
+        <label data-only="register">Name
+          <input name="name" autocomplete="name">
+        </label>
+        <label>Email
+          <input name="email" type="email" inputmode="email" autocomplete="email" required>
+        </label>
+        <label>Password
+          <input name="password" type="password" autocomplete="new-password" minlength="8" required>
+        </label>
+        <p id="authError" class="status error" role="alert"></p>
+        <button type="submit" class="primary big" id="authSubmit">Start free trial</button>
       </form>
     </section>
-
-    <section class="panel preview" aria-label="QR preview">
-      <div class="canvas-wrap">
-        <canvas id="qr" width="512" height="512" aria-label="Generated QR code" role="img"></canvas>
-      </div>
-      <p id="status" class="status" role="status"></p>
-      <div class="actions">
-        <button type="button" id="downloadPng" class="primary">Download PNG</button>
-        <button type="button" id="downloadSvg">Download SVG</button>
-        <button type="button" id="copyImg">Copy</button>
-        <button type="button" id="shareImg">Share</button>
-      </div>
-      <details class="history">
-        <summary>Recent</summary>
-        <ul id="historyList"></ul>
-        <button type="button" id="clearHistory" class="link">Clear history</button>
-      </details>
-    </section>
   </main>
+
+  <!-- Generator -->
+  <div id="appView" hidden>
+    <div class="banner" id="expiredBanner" hidden role="alert"></div>
+    <main class="layout">
+      <section class="panel editor" aria-label="QR content">
+        <div class="editor-head">
+          <h2 id="editorTitle">New QR code</h2>
+          <button type="button" id="newCodeBtn" class="link" hidden>+ New code</button>
+        </div>
+        <nav class="tabs" role="tablist" id="tabs">
+          <button role="tab" data-type="url" aria-selected="true">Link</button>
+          <button role="tab" data-type="text">Text</button>
+          <button role="tab" data-type="wifi">Wi-Fi</button>
+          <button role="tab" data-type="vcard">Contact</button>
+          <button role="tab" data-type="email">Email</button>
+          <button role="tab" data-type="sms">SMS</button>
+          <button role="tab" data-type="phone">Phone</button>
+        </nav>
+
+        <form id="form" autocomplete="off" novalidate>
+          <div class="fields" data-for="url">
+            <label>Website address
+              <input name="url" type="url" inputmode="url" placeholder="https://example.com">
+            </label>
+          </div>
+
+          <div class="fields" data-for="text" hidden>
+            <label>Text
+              <textarea name="text" rows="5" placeholder="Type anything…"></textarea>
+            </label>
+          </div>
+
+          <div class="fields" data-for="wifi" hidden>
+            <label>Network name (SSID)
+              <input name="ssid" placeholder="MyHomeWiFi">
+            </label>
+            <div class="row">
+              <label>Security
+                <select name="security">
+                  <option value="WPA">WPA / WPA2 / WPA3</option>
+                  <option value="WEP">WEP</option>
+                  <option value="nopass">None (open)</option>
+                </select>
+              </label>
+              <label>Password
+                <input name="wifiPassword" type="text" placeholder="Password">
+              </label>
+            </div>
+            <label class="check"><input name="hidden" type="checkbox"> Hidden network</label>
+            <p class="hint">Scanning opens a page showing the network name and password to copy.</p>
+          </div>
+
+          <div class="fields" data-for="vcard" hidden>
+            <div class="row">
+              <label>First name <input name="firstName"></label>
+              <label>Last name <input name="lastName"></label>
+            </div>
+            <div class="row">
+              <label>Phone <input name="vPhone" type="tel" inputmode="tel"></label>
+              <label>Email <input name="vEmail" type="email" inputmode="email"></label>
+            </div>
+            <div class="row">
+              <label>Company <input name="org"></label>
+              <label>Job title <input name="title"></label>
+            </div>
+            <label>Website <input name="vUrl" type="url" inputmode="url"></label>
+            <label>Address <input name="address"></label>
+          </div>
+
+          <div class="fields" data-for="email" hidden>
+            <label>To <input name="emailTo" type="email" inputmode="email" placeholder="name@example.com"></label>
+            <label>Subject <input name="emailSubject"></label>
+            <label>Message <textarea name="emailBody" rows="3"></textarea></label>
+          </div>
+
+          <div class="fields" data-for="sms" hidden>
+            <label>Phone number <input name="smsNumber" type="tel" inputmode="tel" placeholder="+91 98765 43210"></label>
+            <label>Message <textarea name="smsBody" rows="3"></textarea></label>
+          </div>
+
+          <div class="fields" data-for="phone" hidden>
+            <label>Phone number <input name="phone" type="tel" inputmode="tel" placeholder="+91 98765 43210"></label>
+          </div>
+
+          <div class="fields save-row">
+            <label>Name for your list (optional)
+              <input name="label" maxlength="80" placeholder="e.g. Shop menu">
+            </label>
+            <p id="saveError" class="status error" role="alert"></p>
+            <div class="save-actions">
+              <button type="submit" class="primary big" id="saveBtn">Create QR code</button>
+              <button type="button" id="deleteBtn" class="danger" hidden>Delete</button>
+            </div>
+          </div>
+        </form>
+
+        <details class="design" id="designPanel">
+          <summary>Design</summary>
+          <form id="designForm" class="design-grid" novalidate>
+            <div class="row">
+              <label>Foreground <input name="fg" type="color" value="#111827"></label>
+              <label>Background <input name="bg" type="color" value="#ffffff"></label>
+            </div>
+            <div class="row">
+              <label>Style
+                <select name="style">
+                  <option value="square">Square</option>
+                  <option value="rounded">Rounded</option>
+                  <option value="dots">Dots</option>
+                </select>
+              </label>
+              <label>Error correction
+                <select name="ecl">
+                  <option value="L">Low (7%)</option>
+                  <option value="M" selected>Medium (15%)</option>
+                  <option value="Q">Quartile (25%)</option>
+                  <option value="H">High (30%)</option>
+                </select>
+              </label>
+            </div>
+            <div class="row">
+              <label>Size <output id="sizeOut">512 px</output>
+                <input name="size" type="range" min="128" max="2048" step="32" value="512">
+              </label>
+              <label>Quiet zone <output id="marginOut">4</output>
+                <input name="margin" type="range" min="0" max="10" step="1" value="4">
+              </label>
+            </div>
+            <div class="logo-row">
+              <label class="file">Center logo
+                <input id="logoInput" type="file" accept="image/*">
+              </label>
+              <button type="button" id="removeLogo" class="link" hidden>Remove logo</button>
+            </div>
+          </form>
+        </details>
+      </section>
+
+      <section class="panel preview" aria-label="QR preview">
+        <div class="canvas-wrap">
+          <canvas id="qr" width="512" height="512" aria-label="Generated QR code" role="img"></canvas>
+          <p class="placeholder" id="placeholder"><span>Fill in the details and press <strong>Create QR code</strong>.</span></p>
+        </div>
+        <p id="status" class="status" role="status"></p>
+        <p class="short-link" id="shortLink" hidden></p>
+        <div class="actions">
+          <button type="button" id="downloadPng" class="primary">Download PNG</button>
+          <button type="button" id="downloadSvg">Download SVG</button>
+          <button type="button" id="copyImg">Copy</button>
+          <button type="button" id="shareImg">Share</button>
+        </div>
+        <div class="codes">
+          <h2>My QR codes</h2>
+          <ul id="codeList"></ul>
+        </div>
+      </section>
+    </main>
+  </div>
 
   <footer class="foot">QR Code is a registered trademark of DENSO WAVE INCORPORATED.</footer>
 

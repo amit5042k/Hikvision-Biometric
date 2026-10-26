@@ -18,6 +18,7 @@ import android.util.Base64;
 import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
+import android.webkit.WebResourceError;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -35,12 +36,15 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 /**
- * Hosts the QR Generator web app (bundled from qr-generator/web as assets) in a WebView
+ * Hosts the QR Generator website from your server (BuildConfig.SERVER_URL) in a WebView
  * and gives it native save/share through the {@code AndroidBridge} JavaScript object.
+ * Accounts, the 7-day trial and the QR codes themselves all live on the server.
  */
 public class MainActivity extends Activity {
 
-    private static final String START_URL = "file:///android_asset/index.html";
+    private static final String START_URL = BuildConfig.SERVER_URL + "/";
+    private static final String OFFLINE_URL = "file:///android_asset/offline.html";
+    private static final Uri SERVER = Uri.parse(BuildConfig.SERVER_URL);
     private static final String FOLDER = "QR Generator";
     private static final int REQ_FILE = 1;
     private static final int REQ_STORAGE = 2;
@@ -69,7 +73,12 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
-                if ("file".equals(uri.getScheme())) return false;
+                // Stay in the app for our own pages; short links (/r/...) and everything else
+                // open in the browser, exactly as they would for someone scanning the code.
+                boolean ours = SERVER.getScheme().equals(uri.getScheme()) && SERVER.getHost().equals(uri.getHost())
+                        && SERVER.getPort() == uri.getPort();
+                String path = uri.getPath() == null ? "" : uri.getPath();
+                if (ours && !path.startsWith("/r/")) return false;
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, uri));
                 } catch (ActivityNotFoundException ignored) {
@@ -79,8 +88,13 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (request.isForMainFrame()) view.loadUrl(OFFLINE_URL);
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
-                pageReady = true;
+                pageReady = !OFFLINE_URL.equals(url);
                 deliverSharedText();
             }
         });
@@ -112,6 +126,13 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         handleIntent(intent);
         deliverSharedText();
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public void onBackPressed() {
+        if (web.canGoBack() && !OFFLINE_URL.equals(web.getUrl())) web.goBack();
+        else super.onBackPressed();
     }
 
     @Override
@@ -151,7 +172,7 @@ public class MainActivity extends Activity {
     }
 
     private void deliverSharedText() {
-        if (!pageReady || pendingSharedText == null) return;
+        if (!pageReady || pendingSharedText == null || OFFLINE_URL.equals(web.getUrl())) return;
         web.evaluateJavascript("window.QRGen && QRGen.fill(" + JSONObject.quote(pendingSharedText) + ")", null);
         pendingSharedText = null;
     }
@@ -173,6 +194,15 @@ public class MainActivity extends Activity {
 
     /** Methods callable from app.js as window.AndroidBridge.*. They run on a WebView background thread. */
     private class Bridge {
+
+        /** Called by the offline page's Retry button. */
+        @JavascriptInterface
+        public void retry() {
+            runOnUiThread(() -> {
+                pageReady = false;
+                web.loadUrl(START_URL);
+            });
+        }
 
         @JavascriptInterface
         public void saveFile(String base64, String mime, String name) {
