@@ -72,6 +72,7 @@ def _lookups():
     return {
         "departments": db.execute("SELECT * FROM departments ORDER BY name").fetchall(),
         "shifts": db.execute("SELECT * FROM shifts ORDER BY name").fetchall(),
+        "sites": db.execute("SELECT * FROM sites ORDER BY name").fetchall(),
         "devices": db.execute("SELECT * FROM devices ORDER BY name").fetchall(),
     }
 
@@ -141,7 +142,8 @@ def logout():
 def dashboard():
     db = get_db()
     today = date.today()
-    rows = att.compute(db, today, today)
+    site = _int(request.args.get("site"))
+    rows = att.compute(db, today, today, att.load_employees(db, site_id=site))
     counts = {"total": len(rows), "P": 0, "A": 0, "L": 0, "late": 0, "pending": 0, "off": 0}
     for _, days, _ in rows:
         d = days[0]
@@ -161,7 +163,7 @@ def dashboard():
     # last 7 days trend
     week_start = today - timedelta(days=6)
     trend = {d: 0 for d in att.daterange(week_start, today)}
-    for _, days, _ in att.compute(db, week_start, today):
+    for _, days, _ in att.compute(db, week_start, today, att.load_employees(db, site_id=site)):
         for d in days:
             if d.status in ("P", "HD", "MP"):
                 trend[d.date] += 1
@@ -171,11 +173,12 @@ def dashboard():
         "SELECT p.*, e.name, dv.name AS device FROM punches p "
         "LEFT JOIN employees e ON e.employee_no = p.employee_no "
         "LEFT JOIN devices dv ON dv.id = p.device_id ORDER BY p.punch_time DESC LIMIT 15").fetchall()
-    devices = db.execute("SELECT * FROM devices ORDER BY name").fetchall()
+    devices = db.execute("SELECT * FROM devices WHERE ? IS NULL OR site_id = ? ORDER BY name", (site, site)).fetchall()
     late_today = [(e, days[0]) for e, days, _ in rows if days[0].is_late]
     pending = (db.execute("SELECT COUNT(*) FROM leaves WHERE status = 'pending'").fetchone()[0] +
                db.execute("SELECT COUNT(*) FROM punch_requests WHERE status = 'pending'").fetchone()[0])
     return render_template("dashboard.html", counts=counts, recent=recent, devices=devices, pending=pending,
+                           site=site, sites=_lookups()["sites"],
                            trend=trend, trend_max=trend_max, late_today=late_today, today=today)
 
 
@@ -186,10 +189,15 @@ def employees():
     db = get_db()
     q = request.args.get("q", "").strip()
     dept = _int(request.args.get("department"))
+    site = _int(request.args.get("site"))
     status = request.args.get("status", "active")
-    sql = ("SELECT e.*, d.name AS department, s.name AS shift_name FROM employees e "
-           "LEFT JOIN departments d ON d.id = e.department_id LEFT JOIN shifts s ON s.id = e.shift_id WHERE 1=1")
+    sql = ("SELECT e.*, d.name AS department, s.name AS shift_name, st.name AS site FROM employees e "
+           "LEFT JOIN departments d ON d.id = e.department_id LEFT JOIN shifts s ON s.id = e.shift_id "
+           "LEFT JOIN sites st ON st.id = e.site_id WHERE 1=1")
     args = []
+    if site:
+        sql += " AND e.site_id = ?"
+        args.append(site)
     if q:
         sql += " AND (e.name LIKE ? OR e.employee_no LIKE ? OR e.card_no LIKE ?)"
         args += [f"%{q}%"] * 3
@@ -202,7 +210,7 @@ def employees():
         sql += " AND e.active = 0"
     sql += " ORDER BY CAST(e.employee_no AS INTEGER), e.employee_no"
     return render_template("employees.html", employees=db.execute(sql, args).fetchall(),
-                           q=q, dept=dept, status=status, **_lookups())
+                           q=q, dept=dept, site=site, status=status, **_lookups())
 
 
 @bp.route("/employees/new", methods=["GET", "POST"])
@@ -220,6 +228,7 @@ def employee_form(emp_id=None):
             "employee_no": f.get("employee_no", "").strip(),
             "name": f.get("name", "").strip(),
             "department_id": _int(f.get("department_id")),
+            "site_id": _int(f.get("site_id")),
             "shift_id": _int(f.get("shift_id")),
             "designation": f.get("designation", "").strip() or None,
             "email": f.get("email", "").strip() or None,
@@ -440,8 +449,8 @@ def employees_export():
 @staff_required
 def devices():
     db = get_db()
-    rows = db.execute("SELECT d.*, (SELECT COUNT(*) FROM punches p WHERE p.device_id = d.id) AS punch_count "
-                      "FROM devices d ORDER BY name").fetchall()
+    rows = db.execute("SELECT d.*, st.name AS site, (SELECT COUNT(*) FROM punches p WHERE p.device_id = d.id) "
+                      "AS punch_count FROM devices d LEFT JOIN sites st ON st.id = d.site_id ORDER BY d.name").fetchall()
     jobs = db.execute("SELECT j.*, d.name AS device FROM device_jobs j JOIN devices d ON d.id = j.device_id "
                       "ORDER BY j.id DESC LIMIT 15").fetchall()
     return render_template("devices.html", devices=rows, jobs=jobs,
@@ -466,6 +475,7 @@ def device_form(dev_id=None):
             "tz_offset": f.get("tz_offset", "+05:30").strip() or "+05:30",
             "enabled": 1 if f.get("enabled") else 0,
             "connection": "bridge" if f.get("connection") == "bridge" else "direct",
+            "site_id": _int(f.get("site_id")),
         }
         if f.get("password") or not dev:
             data["password"] = f.get("password", "")
@@ -484,7 +494,7 @@ def device_form(dev_id=None):
             flash("Device saved. Use “Test” to verify the connection.", "success")
             return redirect(url_for("main.devices"))
         dev = data
-    return render_template("device_form.html", dev=dev)
+    return render_template("device_form.html", dev=dev, sites=_lookups()["sites"])
 
 
 @bp.route("/devices/<int:dev_id>/delete", methods=["POST"])
@@ -574,8 +584,9 @@ def attendance_daily():
     db = get_db()
     day = att.parse_date(request.args.get("date"), date.today())
     dept = _int(request.args.get("department"))
+    site = _int(request.args.get("site"))
     status = request.args.get("status", "")
-    rows = att.compute(db, day, day, att.report_employees(db, day, day, department_id=dept))
+    rows = att.compute(db, day, day, att.report_employees(db, day, day, department_id=dept, site_id=site))
     rows = [(e, days[0]) for e, days, _ in rows]
     if status == "late":
         rows = [r for r in rows if r[1].is_late]
@@ -590,7 +601,7 @@ def attendance_daily():
                       d.last_out.strftime("%H:%M") if d.last_out else "", att.fmt_minutes(d.work_minutes),
                       d.late_minutes or "", d.early_minutes or "", att.fmt_minutes(d.ot_minutes),
                       "; ".join(d.remarks)] for e, d in rows])
-    return render_template("attendance_daily.html", rows=rows, day=day, dept=dept, status=status,
+    return render_template("attendance_daily.html", rows=rows, day=day, dept=dept, site=site, status=status,
                            prev=day - timedelta(days=1), next=day + timedelta(days=1), **_lookups())
 
 
@@ -665,8 +676,9 @@ def report_monthly():
     db = get_db()
     start, end = _month_range(request.args.get("month"))
     dept = _int(request.args.get("department"))
+    site = _int(request.args.get("site"))
     view = request.args.get("view", "muster")
-    rows = att.compute(db, start, end, att.report_employees(db, start, end, department_id=dept))
+    rows = att.compute(db, start, end, att.report_employees(db, start, end, department_id=dept, site_id=site))
     days = list(att.daterange(start, end))
     export = request.args.get("export")
     if export == "xlsx":
@@ -703,7 +715,7 @@ def report_monthly():
                     ["Employee No", "Name", "Date", "Status", "In", "Out", "Work", "Late (min)", "Early (min)",
                      "OT", "Remarks"], out)
     return render_template("report_monthly.html", rows=rows, days=days, month=start.strftime("%Y-%m"),
-                           month_label=start.strftime("%B %Y"), dept=dept, view=view, weekdays=WEEKDAYS,
+                           month_label=start.strftime("%B %Y"), dept=dept, site=site, view=view, weekdays=WEEKDAYS,
                            **_lookups())
 
 
@@ -1014,17 +1026,21 @@ def bulk_shift():
     ids = [int(x) for x in request.form.getlist("employee_id") if x.isdigit()]
     shift_id = _int(request.form.get("shift_id"))
     dept_id = _int(request.form.get("department_id"))
-    if ids and (shift_id or dept_id):
+    site_id = _int(request.form.get("site_id"))
+    if ids and (shift_id or dept_id or site_id):
         marks = ",".join("?" * len(ids))
         if shift_id:
             db.execute(f"UPDATE employees SET shift_id = ? WHERE id IN ({marks})", [shift_id, *ids])
         if dept_id:
             db.execute(f"UPDATE employees SET department_id = ? WHERE id IN ({marks})", [dept_id, *ids])
-        _audit("employee.bulk", f"{len(ids)} employees: shift={shift_id or '-'} department={dept_id or '-'}")
+        if site_id:
+            db.execute(f"UPDATE employees SET site_id = ? WHERE id IN ({marks})", [site_id, *ids])
+        _audit("employee.bulk", f"{len(ids)} employees: shift={shift_id or '-'} department={dept_id or '-'} "
+                                f"office={site_id or '-'}")
         db.commit()
         flash(f"Updated {len(ids)} employees.", "success")
     else:
-        flash("Select employees and a shift or department.", "error")
+        flash("Select employees and a shift, department or office.", "error")
     return redirect(request.referrer or url_for("main.employees"))
 
 
@@ -1212,3 +1228,173 @@ def download_backup():
     """Take a fresh database backup and download it."""
     path = dbmod.backup(current_app.config["DATABASE"], current_app.config["BACKUP_DIR"])
     return send_file(path, as_attachment=True, download_name=path.name)
+
+
+# ---------------------------------------------------------------- roster ---
+def _week_start(value):
+    d = att.parse_date(value, date.today())
+    return d - timedelta(days=d.weekday())
+
+
+@bp.route("/roster", methods=["GET", "POST"])
+@staff_required
+def roster():
+    """Weekly shift roster: per-day shift overrides on top of each employee's default shift."""
+    db = get_db()
+    week = _week_start(request.values.get("week"))
+    days = [week + timedelta(days=i) for i in range(7)]
+    dept = _int(request.values.get("department"))
+    site = _int(request.values.get("site"))
+    employees = att.load_employees(db, department_id=dept, site_id=site)
+    if request.method == "POST":
+        if g.user["role"] != "admin":
+            flash("Only administrators can change the roster.", "error")
+            return redirect(url_for("main.roster", week=week, department=dept or "", site=site or ""))
+        shift_ids = {str(r["id"]) for r in db.execute("SELECT id FROM shifts")}
+        changed = 0
+        for e in employees:
+            for d in days:
+                key = f"r_{e['id']}_{d.isoformat()}"
+                if key not in request.form:
+                    continue
+                value = request.form[key]
+                if value == "":
+                    changed += db.execute("DELETE FROM roster WHERE employee_id = ? AND date = ?",
+                                          (e["id"], d.isoformat())).rowcount
+                elif value == "off" or value in shift_ids:
+                    db.execute("INSERT INTO roster (employee_id, date, shift_id) VALUES (?, ?, ?) "
+                               "ON CONFLICT(employee_id, date) DO UPDATE SET shift_id = excluded.shift_id",
+                               (e["id"], d.isoformat(), None if value == "off" else int(value)))
+                    changed += 1
+        _audit("roster.save", f"week of {week}: {changed} cell(s)")
+        db.commit()
+        flash(f"Roster saved for the week of {week:%d %b %Y}.", "success")
+        return redirect(url_for("main.roster", week=week, department=dept or "", site=site or ""))
+    cells = {}
+    if employees:
+        ids = [e["id"] for e in employees]
+        for r in db.execute(f"SELECT * FROM roster WHERE date BETWEEN ? AND ? AND employee_id IN "
+                            f"({','.join('?' * len(ids))})", [days[0].isoformat(), days[-1].isoformat(), *ids]):
+            cells[(r["employee_id"], r["date"])] = "off" if r["shift_id"] is None else str(r["shift_id"])
+    return render_template("roster.html", week=week, days=days, employees=employees, cells=cells, dept=dept,
+                           site=site, prev=week - timedelta(days=7), next=week + timedelta(days=7),
+                           weekdays=WEEKDAYS, **_lookups())
+
+
+@bp.route("/roster/rotate", methods=["POST"])
+@admin_required
+def roster_rotate():
+    """Fill the roster with a repeating weekly pattern, e.g. Morning, Evening, Night."""
+    db = get_db()
+    start = _week_start(request.form.get("start"))
+    weeks = max(1, min(_int(request.form.get("weeks"), 4), 26))
+    pattern = [_int(x) for x in request.form.getlist("pattern") if x]
+    pattern = [p for p in pattern if p and db.execute("SELECT 1 FROM shifts WHERE id = ?", (p,)).fetchone()]
+    ids = [int(x) for x in request.form.getlist("employee_id") if x.isdigit()]
+    stagger = bool(request.form.get("stagger"))
+    if not pattern or not ids:
+        flash("Pick at least one employee and one shift for the rotation.", "error")
+        return redirect(url_for("main.roster", week=start))
+    shifts = {r["id"]: r for r in db.execute("SELECT * FROM shifts")}
+    written = 0
+    for n, emp_id in enumerate(ids):
+        offset = n if stagger else 0  # stagger: employees start at different points of the pattern
+        for w in range(weeks):
+            shift = shifts[pattern[(w + offset) % len(pattern)]]
+            offs = {x for x in (shift["weekly_off"] or "").split(",") if x}
+            for i in range(7):
+                d = start + timedelta(days=7 * w + i)
+                db.execute("INSERT INTO roster (employee_id, date, shift_id) VALUES (?, ?, ?) "
+                           "ON CONFLICT(employee_id, date) DO UPDATE SET shift_id = excluded.shift_id",
+                           (emp_id, d.isoformat(), None if str(i) in offs else shift["id"]))
+                written += 1
+    _audit("roster.rotate", f"{len(ids)} employee(s), {weeks} week(s) from {start}: "
+                            + " > ".join(shifts[p]["name"] for p in pattern))
+    db.commit()
+    flash(f"Rotation applied: {len(ids)} employee(s) for {weeks} week(s) from {start:%d %b %Y}.", "success")
+    return redirect(url_for("main.roster", week=start))
+
+
+@bp.route("/roster/copy", methods=["POST"])
+@admin_required
+def roster_copy():
+    """Copy the previous week's roster into this week."""
+    db = get_db()
+    week = _week_start(request.form.get("week"))
+    src = week - timedelta(days=7)
+    rows = db.execute("SELECT employee_id, date, shift_id FROM roster WHERE date BETWEEN ? AND ?",
+                      (src.isoformat(), (src + timedelta(days=6)).isoformat())).fetchall()
+    for r in rows:
+        d = att.parse_date(r["date"]) + timedelta(days=7)
+        db.execute("INSERT INTO roster (employee_id, date, shift_id) VALUES (?, ?, ?) "
+                   "ON CONFLICT(employee_id, date) DO UPDATE SET shift_id = excluded.shift_id",
+                   (r["employee_id"], d.isoformat(), r["shift_id"]))
+    _audit("roster.copy", f"{src} -> {week}: {len(rows)} cell(s)")
+    db.commit()
+    flash(f"Copied {len(rows)} roster entries from the previous week.", "success" if rows else "warning")
+    return redirect(url_for("main.roster", week=week))
+
+
+# ---------------------------------------------------------------- offices --
+@bp.route("/sites", methods=["GET", "POST"])
+@staff_required
+def sites():
+    """Offices / locations. Each can have its own terminals, bridge PC and reports."""
+    db = get_db()
+    if request.method == "POST":
+        if g.user["role"] != "admin":
+            flash("Only administrators can change offices.", "error")
+            return redirect(url_for("main.sites"))
+        sid = _int(request.form.get("id"))
+        name = request.form.get("name", "").strip()[:80]
+        address = request.form.get("address", "").strip()[:200] or None
+        if not name:
+            flash("Office name is required.", "error")
+        else:
+            try:
+                if sid:
+                    db.execute("UPDATE sites SET name = ?, address = ? WHERE id = ?", (name, address, sid))
+                else:
+                    db.execute("INSERT INTO sites (name, address) VALUES (?, ?)", (name, address))
+                _audit("site.save", name)
+                db.commit()
+                flash(f"Office {name} saved.", "success")
+            except sqlite3.IntegrityError:
+                db.rollback()
+                flash("An office with that name already exists.", "error")
+        return redirect(url_for("main.sites"))
+    rows = db.execute(
+        "SELECT st.*, (SELECT COUNT(*) FROM employees e WHERE e.site_id = st.id AND e.active = 1) AS n_emp, "
+        "(SELECT COUNT(*) FROM devices d WHERE d.site_id = st.id) AS n_dev FROM sites st ORDER BY name").fetchall()
+    unassigned = db.execute("SELECT COUNT(*) FROM employees WHERE site_id IS NULL AND active = 1").fetchone()[0]
+    return render_template("sites.html", rows=rows, unassigned=unassigned, server_url=request.host_url.rstrip("/"),
+                           edit=db.execute("SELECT * FROM sites WHERE id = ?",
+                                           (_int(request.args.get("edit")),)).fetchone())
+
+
+@bp.route("/sites/<int:sid>/token", methods=["POST"])
+@admin_required
+def site_token(sid):
+    db = get_db()
+    site = db.execute("SELECT name FROM sites WHERE id = ?", (sid,)).fetchone()
+    if site:
+        remove = request.form.get("remove")
+        db.execute("UPDATE sites SET bridge_token = ? WHERE id = ?", (None if remove else secrets.token_urlsafe(24), sid))
+        _audit("site.bridge_token", f"{site['name']}: {'removed' if remove else 'new token'}")
+        db.commit()
+        flash(f"Bridge token for {site['name']} {'removed' if remove else 'created - put it in that office’s bridge.ini'}.",
+              "warning")
+    return redirect(url_for("main.sites"))
+
+
+@bp.route("/sites/<int:sid>/delete", methods=["POST"])
+@admin_required
+def site_delete(sid):
+    db = get_db()
+    site = db.execute("SELECT name FROM sites WHERE id = ?", (sid,)).fetchone()
+    if site:
+        db.execute("DELETE FROM sites WHERE id = ?", (sid,))
+        _audit("site.delete", site["name"])
+        db.commit()
+        flash(f"Office {site['name']} deleted. Its employees and devices are kept without an office.", "success")
+    return redirect(url_for("main.sites"))

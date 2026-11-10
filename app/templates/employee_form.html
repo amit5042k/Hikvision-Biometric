@@ -11,7 +11,9 @@
     <label>Full name *<input name="name" value="{{ emp.name if emp else '' }}" required maxlength="64"></label>
     <label>Department<select name="department_id"><option value="">—</option>
       {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if emp and emp.department_id == d.id }}>{{ d.name }}</option>{% endfor %}</select></label>
-    <label>Shift<select name="shift_id"><option value="">—</option>
+    {% if sites %}<label>Office<select name="site_id"><option value="">—</option>
+      {% for st in sites %}<option value="{{ st.id }}" {{ 'selected' if emp and emp.site_id == st.id }}>{{ st.name }}</option>{% endfor %}</select></label>{% endif %}
+    <label>Default shift<select name="shift_id"><option value="">—</option>
       {% for s in shifts %}<option value="{{ s.id }}" {{ 'selected' if (emp and emp.shift_id == s.id) or (not emp and loop.first) }}>{{ s.name }} ({{ s.start_time }}–{{ s.end_time }})</option>{% endfor %}</select></label>
     <label>Designation<input name="designation" value="{{ emp.designation or '' if emp else '' }}"></label>
     <label>Card No.<input name="card_no" value="{{ emp.card_no or '' if emp else '' }}" inputmode="numeric"></label>

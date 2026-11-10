@@ -25,6 +25,8 @@ DEFAULT_SETTINGS = {
     "report_recipients": "",         # comma separated
     "report_time": "19:00",          # when the daily summary is sent (server local time)
     "report_last_sent": "",
+    "require_2fa_admins": "0",       # 1 = administrators must set up two-factor sign-in
+    "default_language": "en",        # en | hi
 }
 
 # Schema changes after the first release.
@@ -99,6 +101,30 @@ MIGRATIONS = [
             details  TEXT
         );
         CREATE INDEX idx_audit_at ON audit_log (at);
+    """),
+    (5, """
+        -- several offices, each with its own terminals and (optionally) its own bridge
+        CREATE TABLE sites (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            name         TEXT NOT NULL UNIQUE,
+            address      TEXT,
+            bridge_token TEXT UNIQUE
+        );
+        ALTER TABLE employees ADD COLUMN site_id INTEGER REFERENCES sites(id) ON DELETE SET NULL;
+        ALTER TABLE devices ADD COLUMN site_id INTEGER REFERENCES sites(id) ON DELETE SET NULL;
+        -- shift roster: per-day shift overrides; shift_id NULL = rest day
+        CREATE TABLE roster (
+            employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+            date        TEXT NOT NULL,
+            shift_id    INTEGER REFERENCES shifts(id) ON DELETE CASCADE,
+            PRIMARY KEY (employee_id, date)
+        );
+        -- two-factor sign-in (TOTP) and interface language per user
+        ALTER TABLE users ADD COLUMN totp_secret TEXT;
+        ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE users ADD COLUMN recovery_codes TEXT;
+        ALTER TABLE users ADD COLUMN totp_last_step INTEGER;
+        ALTER TABLE users ADD COLUMN language TEXT;
     """),
 ]
 SCHEMA_VERSION = MIGRATIONS[-1][0] if MIGRATIONS else 1

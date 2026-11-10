@@ -11,7 +11,7 @@
   <div class="page-head" style="margin-bottom:8px">
     <div>
       <h2 style="margin:0"><span class="dot {{ d.last_status or '' }}"></span>{{ d.name }} {% if not d.enabled %}<span class="badge">disabled</span>{% endif %}</h2>
-      <div class="muted small">{{ d.scheme }}://{{ d.host }}:{{ d.port }} · door {{ d.door_no }} · UTC{{ d.tz_offset }}
+      <div class="muted small">{% if d.site %}<b>{{ d.site }}</b> · {% endif %}{{ d.scheme }}://{{ d.host }}:{{ d.port }} · door {{ d.door_no }} · UTC{{ d.tz_offset }}
         · {% if d.connection == 'bridge' %}<b>via bridge agent</b> (last check-in: {{ d.last_seen_at or 'never – is the bridge running?' }}){% else %}direct{% endif %}
         {% if d.model %} · {{ d.model }} · S/N {{ d.serial_no }} · FW {{ d.firmware }}{% endif %}</div>
     </div>

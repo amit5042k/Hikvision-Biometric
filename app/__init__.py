@@ -22,6 +22,7 @@ def create_app(test_config=None):
         DATABASE=os.environ.get("ATTENDANCE_DB") or os.path.join(data_dir, "attendance.db"),
         BACKUP_DIR=os.path.join(data_dir, "backups"),
         MAX_CONTENT_LENGTH=4 * 1024 * 1024,
+        MAX_FORM_PARTS=20000,  # the weekly roster grid posts one field per employee per day
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=os.environ.get("HTTPS_ONLY", "").lower() in ("1", "true", "yes"),

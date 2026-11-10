@@ -3,3 +3,7 @@
 {% macro post_button(action, label, cls='btn sm', confirm=None) %}
 <form method="post" action="{{ action }}" class="inline"{% if confirm %} data-confirm="{{ confirm }}"{% endif %}>{{ csrf() }}<button class="{{ cls }}" type="submit">{{ label }}</button></form>
 {% endmacro %}
+{% macro site_filter(sites, site, autosubmit=False) %}{% if sites %}
+<label>Office<select name="site"{% if autosubmit %} onchange="this.form.submit()"{% endif %}><option value="">All offices</option>
+  {% for s in sites %}<option value="{{ s.id }}" {{ 'selected' if s.id == site }}>{{ s.name }}</option>{% endfor %}</select></label>
+{% endif %}{% endmacro %}

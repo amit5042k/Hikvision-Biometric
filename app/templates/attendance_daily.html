@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% from "_macros.html" import badge %}
+{% from "_macros.html" import badge, site_filter %}
 {% block title %}Daily attendance{% endblock %}
 {% block content %}
 <div class="page-head">
   <div><h1>Daily attendance</h1><div class="muted">{{ day.strftime('%A, %d %B %Y') }}</div></div>
   <div class="actions no-print">
-    <a class="btn" href="{{ url_for('main.attendance_daily', date=prev, department=dept or '', status=status) }}">← Prev</a>
-    <a class="btn" href="{{ url_for('main.attendance_daily', date=next, department=dept or '', status=status) }}">Next →</a>
-    <a class="btn" href="{{ url_for('main.attendance_daily', date=day, department=dept or '', status=status, export=1) }}">Export CSV</a>
+    <a class="btn" href="{{ url_for('main.attendance_daily', date=prev, department=dept or '', site=site or '', status=status) }}">← Prev</a>
+    <a class="btn" href="{{ url_for('main.attendance_daily', date=next, department=dept or '', site=site or '', status=status) }}">Next →</a>
+    <a class="btn" href="{{ url_for('main.attendance_daily', date=day, department=dept or '', site=site or '', status=status, export=1) }}">Export CSV</a>
     <button class="btn" onclick="window.print()">Print</button>
   </div>
 </div>
@@ -16,6 +16,7 @@
     <label>Date<input type="date" name="date" value="{{ day }}"></label>
     <label>Department<select name="department"><option value="">All</option>
       {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if d.id == dept }}>{{ d.name }}</option>{% endfor %}</select></label>
+    {{ site_filter(sites, site) }}
     <label>Status<select name="status"><option value="">All</option>
       {% for v in ['P', 'A', 'HD', 'MP', 'L', 'H', 'WO'] %}<option value="{{ v }}" {{ 'selected' if v == status }}>{{ STATUS_LABELS[v] }}</option>{% endfor %}
       <option value="late" {{ 'selected' if status == 'late' }}>Late</option></select></label>
@@ -32,7 +33,7 @@
       <tr>
         <td>{{ e.employee_no }}</td>
         <td><a href="{{ url_for('main.employee_detail', emp_id=e.id, month=day.strftime('%Y-%m')) }}">{{ e.name }}</a></td>
-        <td>{{ e.department or '' }}</td><td class="small">{{ e.shift_name or '' }}</td>
+        <td>{{ e.department or '' }}</td><td class="small">{{ d.shift_name or e.shift_name or '' }}{% if d.shift_name %} <span class="badge">roster</span>{% endif %}</td>
         <td>{{ badge(d) }}</td>
         <td>{{ d.first_in.strftime('%H:%M') if d.first_in else '' }}</td>
         <td>{{ d.last_out.strftime('%H:%M') if d.last_out else '' }}</td>

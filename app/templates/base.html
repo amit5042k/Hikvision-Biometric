@@ -28,8 +28,10 @@
       <div class="sep">Setup</div>
       <a href="{{ url_for('main.employees') }}" class="{{ 'active' if ep and ep.startswith('main.employee') }}">Employees</a>
       <a href="{{ url_for('main.shifts') }}" class="{{ 'active' if ep == 'main.shifts' }}">Shifts</a>
+      <a href="{{ url_for('main.roster') }}" class="{{ 'active' if ep == 'main.roster' }}">Shift Roster</a>
       <a href="{{ url_for('main.holidays') }}" class="{{ 'active' if ep == 'main.holidays' }}">Holidays</a>
       <a href="{{ url_for('main.devices') }}" class="{{ 'active' if ep and ep.startswith('main.device') }}">Devices</a>
+      <a href="{{ url_for('main.sites') }}" class="{{ 'active' if ep == 'main.sites' }}">Offices</a>
       <a href="{{ url_for('main.settings') }}" class="{{ 'active' if ep == 'main.settings' }}">Settings</a>
       {% if user and user.role == 'admin' %}<a href="{{ url_for('main.audit_log') }}" class="{{ 'active' if ep == 'main.audit_log' }}">Audit Log</a>{% endif %}
       {% endif %}

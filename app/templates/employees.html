@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import csrf %}
+{% from "_macros.html" import csrf, site_filter %}
 {% block title %}Employees{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -14,6 +14,7 @@
     <label>Search<input name="q" value="{{ q }}" placeholder="Name, number or card"></label>
     <label>Department<select name="department"><option value="">All</option>
       {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if d.id == dept }}>{{ d.name }}</option>{% endfor %}</select></label>
+    {{ site_filter(sites, site) }}
     <label>Status<select name="status">
       {% for v, l in [('active','Active'),('inactive','Inactive'),('all','All')] %}<option value="{{ v }}" {{ 'selected' if v == status }}>{{ l }}</option>{% endfor %}</select></label>
     <button class="btn" type="submit">Filter</button>
@@ -25,13 +26,14 @@
   <div class="table-wrap">
   <table>
     <thead><tr>{% if user.role == 'admin' %}<th><input type="checkbox" onclick="document.querySelectorAll('.pick').forEach(c => c.checked = this.checked)"></th>{% endif %}
-      <th>No.</th><th>Name</th><th>Department</th><th>Designation</th><th>Shift</th><th>Card</th><th>Face</th><th></th></tr></thead>
+      <th>No.</th><th>Name</th>{% if sites %}<th>Office</th>{% endif %}<th>Department</th><th>Designation</th><th>Shift</th><th>Card</th><th>Face</th><th></th></tr></thead>
     <tbody>
     {% for e in employees %}
       <tr>
         {% if user.role == 'admin' %}<td><input type="checkbox" class="pick" name="employee_id" value="{{ e.id }}"></td>{% endif %}
         <td>{{ e.employee_no }}</td>
         <td><a href="{{ url_for('main.employee_detail', emp_id=e.id) }}">{{ e.name }}</a>{% if not e.active %} <span class="badge">inactive</span>{% endif %}</td>
+        {% if sites %}<td>{{ e.site or '—' }}</td>{% endif %}
         <td>{{ e.department or '—' }}</td><td>{{ e.designation or '' }}</td><td>{{ e.shift_name or '—' }}</td>
         <td>{{ e.card_no or '' }}</td><td>{{ '✔' if e.has_face else '' }}</td>
         <td>{% if user.role == 'admin' %}<a class="btn sm" href="{{ url_for('main.employee_form', emp_id=e.id) }}">Edit</a>{% endif %}</td>
@@ -45,6 +47,7 @@
   {% if user.role == 'admin' and employees %}
   <div class="filters" style="margin-top:14px">
     <label>Set shift for selected<select name="shift_id"><option value="">—</option>{% for s in shifts %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select></label>
+    {% if sites %}<label>Set office<select name="site_id"><option value="">—</option>{% for s in sites %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select></label>{% endif %}
     <label>Set department<select name="department_id"><option value="">—</option>{% for d in departments %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select></label>
     <button class="btn" type="submit">Apply to selected</button>
   </div>

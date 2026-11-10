@@ -134,3 +134,6 @@ td.wrap code { word-break: break-all; }
 .bal-low { color: var(--bad); font-weight: 700; }
 .inline-form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .inline-form input { padding: 4px 8px; }
+table.roster td, table.roster th { padding: 5px 6px; }
+table.roster select { padding: 4px 6px; font-size: 12px; max-width: 120px; }
+table.roster select.set { background: var(--info-bg); border-color: #b8cdee; font-weight: 600; }

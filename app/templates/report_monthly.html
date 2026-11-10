@@ -1,13 +1,14 @@
 {% extends "base.html" %}
+{% from "_macros.html" import site_filter %}
 {% block title %}Monthly report{% endblock %}
 {% block content %}
 <div class="page-head">
   <div><h1>Monthly report</h1><div class="muted">{{ month_label }}</div></div>
   <div class="actions no-print">
-    <a class="btn primary" href="{{ url_for('main.report_monthly', month=month, department=dept or '', export='xlsx') }}">Excel (.xlsx)</a>
-    <a class="btn" href="{{ url_for('main.report_monthly', month=month, department=dept or '', export='muster') }}">Muster roll CSV</a>
-    <a class="btn" href="{{ url_for('main.report_monthly', month=month, department=dept or '', export='summary') }}">Summary CSV</a>
-    <a class="btn" href="{{ url_for('main.report_monthly', month=month, department=dept or '', export='detail') }}">Daily detail CSV</a>
+    <a class="btn primary" href="{{ url_for('main.report_monthly', month=month, department=dept or '', site=site or '', export='xlsx') }}">Excel (.xlsx)</a>
+    <a class="btn" href="{{ url_for('main.report_monthly', month=month, department=dept or '', site=site or '', export='muster') }}">Muster roll CSV</a>
+    <a class="btn" href="{{ url_for('main.report_monthly', month=month, department=dept or '', site=site or '', export='summary') }}">Summary CSV</a>
+    <a class="btn" href="{{ url_for('main.report_monthly', month=month, department=dept or '', site=site or '', export='detail') }}">Daily detail CSV</a>
     <button class="btn" onclick="window.print()">Print</button>
   </div>
 </div>
@@ -16,6 +17,7 @@
     <label>Month<input type="month" name="month" value="{{ month }}"></label>
     <label>Department<select name="department"><option value="">All</option>
       {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if d.id == dept }}>{{ d.name }}</option>{% endfor %}</select></label>
+    {{ site_filter(sites, site) }}
     <label>View<select name="view">
       <option value="muster" {{ 'selected' if view == 'muster' }}>Muster roll</option>
       <option value="summary" {{ 'selected' if view == 'summary' }}>Summary</option></select></label>

@@ -1,10 +1,13 @@
 {% extends "base.html" %}
-{% from "_macros.html" import badge %}
+{% from "_macros.html" import badge, site_filter %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 <div class="page-head">
   <div><h1>Dashboard</h1><div class="muted">{{ today.strftime('%A, %d %B %Y') }}</div></div>
-  <a class="btn" href="{{ url_for('main.attendance_daily') }}">Today's attendance →</a>
+  <div class="actions">
+    {% if sites %}<form method="get" class="filters">{{ site_filter(sites, site, autosubmit=True) }}</form>{% endif %}
+    <a class="btn" href="{{ url_for('main.attendance_daily', site=site or '') }}">Today's attendance →</a>
+  </div>
 </div>
 {% if pending %}
 <div class="flash warning" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">

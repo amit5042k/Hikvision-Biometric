@@ -13,7 +13,7 @@ Every request carries ``Authorization: Bearer <bridge token>`` (Settings page).
 import hmac
 import json
 
-from flask import Blueprint, abort, jsonify, request
+from flask import Blueprint, abort, g, jsonify, request
 
 from . import db as dbmod
 from . import sync
@@ -29,15 +29,30 @@ EXPIRING_ACTIONS = {"open-door": 2, "set-time": 30}  # minutes a pending job sta
 
 @bp.before_request
 def check_token():
-    expected = dbmod.get_setting(get_db(), "bridge_token")
-    sent = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-    if not expected or not hmac.compare_digest(sent.encode(), expected.encode()):
-        abort(401)
+    """The main token serves every bridge device; an office's own token only that office's devices."""
+    db = get_db()
+    sent = request.headers.get("Authorization", "").removeprefix("Bearer ").strip().encode()
+    expected = dbmod.get_setting(db, "bridge_token")
+    if sent and expected and hmac.compare_digest(sent, expected.encode()):
+        g.bridge_site = None
+        return
+    for site in db.execute("SELECT id, bridge_token FROM sites WHERE bridge_token IS NOT NULL"):
+        if sent and hmac.compare_digest(sent, site["bridge_token"].encode()):
+            g.bridge_site = site["id"]
+            return
+    abort(401)
+
+
+def _scope():
+    """SQL condition limiting devices to what this bridge may serve."""
+    if g.bridge_site is None:
+        return "connection = 'bridge'", []
+    return "connection = 'bridge' AND site_id = ?", [g.bridge_site]
 
 
 def _device(device_id):
-    dev = get_db().execute("SELECT * FROM devices WHERE id = ? AND connection = 'bridge'",
-                           (device_id,)).fetchone()
+    cond, args = _scope()
+    dev = get_db().execute(f"SELECT * FROM devices WHERE id = ? AND {cond}", [device_id, *args]).fetchone()
     if not dev:
         abort(404)
     return dev
@@ -46,7 +61,8 @@ def _device(device_id):
 @bp.get("/poll")
 def poll():
     db = get_db()
-    db.execute("UPDATE devices SET last_seen_at = datetime('now','localtime') WHERE connection = 'bridge'")
+    cond, args = _scope()
+    db.execute(f"UPDATE devices SET last_seen_at = datetime('now','localtime') WHERE {cond}", args)
     db.execute("UPDATE device_jobs SET status = 'failed', result = 'Bridge did not answer in time', "
                "finished_at = datetime('now','localtime') WHERE status = 'sent' "
                "AND COALESCE(sent_at, created_at) < datetime('now','localtime', ?)", (f"-{JOB_TIMEOUT_MIN} minutes",))
@@ -55,7 +71,7 @@ def poll():
                    "result = 'Expired: the bridge was offline, so this was not carried out late' "
                    "WHERE status = 'pending' AND action = ? AND created_at < datetime('now','localtime', ?)",
                    (action, f"-{minutes} minutes"))
-    devices = db.execute("SELECT * FROM devices WHERE connection = 'bridge' AND enabled = 1").fetchall()
+    devices = db.execute(f"SELECT * FROM devices WHERE {cond} AND enabled = 1", args).fetchall()
     ids = [d["id"] for d in devices]
     jobs = []
     if ids:
@@ -104,7 +120,7 @@ def job_result(job_id):
     if job["status"] not in ("sent", "failed") or (job["status"] == "failed" and job["sent_at"] is None):
         return jsonify({"status": job["status"]})  # never handed out, or already answered
     body = request.get_json(force=True, silent=True) or {}
-    dev = db.execute("SELECT * FROM devices WHERE id = ?", (job["device_id"],)).fetchone()
+    dev = _device(job["device_id"])  # a bridge can only answer jobs for devices it serves
     message = body.get("message") or ""
     if body.get("ok"):
         payload = json.loads(job["payload"] or "{}")

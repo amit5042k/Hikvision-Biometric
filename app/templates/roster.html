@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, site_filter %}
+{% block title %}Shift roster{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Shift roster</h1><div class="muted">Week of {{ week.strftime('%d %B %Y') }} · each cell overrides the employee's default shift for that day</div></div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('main.roster', week=prev, department=dept or '', site=site or '') }}">← Prev week</a>
+    <a class="btn" href="{{ url_for('main.roster', week=next, department=dept or '', site=site or '') }}">Next week →</a>
+  </div>
+</div>
+<div class="card">
+  <form class="filters" method="get">
+    <label>Week of<input type="date" name="week" value="{{ week }}"></label>
+    <label>Department<select name="department"><option value="">All</option>
+      {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if d.id == dept }}>{{ d.name }}</option>{% endfor %}</select></label>
+    {{ site_filter(sites, site) }}
+    <button class="btn" type="submit">Show</button>
+  </form>
+</div>
+<form method="post" class="card">
+  {{ csrf() }}<input type="hidden" name="week" value="{{ week }}"><input type="hidden" name="department" value="{{ dept or '' }}"><input type="hidden" name="site" value="{{ site or '' }}">
+  <div class="table-wrap">
+  <table class="roster">
+    <thead><tr><th>Employee</th><th>Default shift</th>
+      {% for d in days %}<th class="{{ 'we' if d.weekday() == 6 }}">{{ weekdays[d.weekday()] }}<div class="small" style="text-transform:none">{{ d.strftime('%d %b') }}</div></th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for e in employees %}
+      <tr><td>{{ e.name }}<div class="muted small">#{{ e.employee_no }}</div></td>
+        <td class="small">{{ e.shift_name or '—' }}</td>
+        {% for d in days %}{% set v = cells.get((e.id, d.isoformat()), '') %}
+        <td><select name="r_{{ e.id }}_{{ d.isoformat() }}" class="{{ 'set' if v }}" {{ 'disabled' if user.role != 'admin' }}>
+          <option value="">Default</option>
+          {% for s in shifts %}<option value="{{ s.id }}" {{ 'selected' if v == s.id|string }}>{{ s.name }}</option>{% endfor %}
+          <option value="off" {{ 'selected' if v == 'off' }}>Rest day</option>
+        </select></td>{% endfor %}
+      </tr>
+    {% else %}<tr><td colspan="9" class="muted">No employees match.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if user.role == 'admin' and employees %}
+  <div class="actions" style="margin-top:12px">
+    <button class="btn primary" type="submit">Save roster</button>
+    <span class="muted small">"Default" = the employee's own shift and weekly offs. Highlighted cells are rostered.</span>
+  </div>
+  {% endif %}
+</form>
+{% if user.role == 'admin' %}
+<div class="grid grid-2">
+  <form method="post" action="{{ url_for('main.roster_copy') }}" class="card">
+    {{ csrf() }}<input type="hidden" name="week" value="{{ week }}">
+    <h2>Copy last week</h2>
+    <p class="muted small">Copies every rostered cell from the week of {{ prev.strftime('%d %b') }} into this week (existing cells are overwritten).</p>
+    <button class="btn" type="submit">Copy into this week</button>
+  </form>
+  <form method="post" action="{{ url_for('main.roster_rotate') }}" class="card">
+    {{ csrf() }}
+    <h2>Rotation</h2>
+    <p class="muted small">Repeat shifts week by week, e.g. Morning → Evening → Night. Each shift's own weekly offs become rest days.</p>
+    <div class="form-grid">
+      <label>Start week<input type="date" name="start" value="{{ week }}"></label>
+      <label>Number of weeks<input type="number" name="weeks" min="1" max="26" value="4"></label>
+      {% for i in range(4) %}<label>Week {{ i + 1 }} of pattern<select name="pattern"><option value="">—</option>
+        {% for s in shifts %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select></label>{% endfor %}
+      <label class="check full"><input type="checkbox" name="stagger"> Stagger: each employee starts one step later in the pattern (so not everyone is on nights together)</label>
+      <div class="full"><div class="muted small" style="font-weight:600;margin-bottom:6px">Employees (shown above)</div>
+        <div class="days-pick">{% for e in employees %}<label class="check"><input type="checkbox" name="employee_id" value="{{ e.id }}" checked> {{ e.name }}</label>{% endfor %}</div></div>
+      <div class="full"><button class="btn primary" type="submit">Apply rotation</button></div>
+    </div>
+  </form>
+</div>
+{% endif %}
+{% endblock %}
