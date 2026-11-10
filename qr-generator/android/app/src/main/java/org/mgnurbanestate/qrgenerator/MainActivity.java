@@ -75,8 +75,7 @@ public class MainActivity extends Activity {
                 Uri uri = request.getUrl();
                 // Stay in the app for our own pages; short links (/r/...) and everything else
                 // open in the browser, exactly as they would for someone scanning the code.
-                boolean ours = SERVER.getScheme().equals(uri.getScheme()) && SERVER.getHost().equals(uri.getHost())
-                        && SERVER.getPort() == uri.getPort();
+                boolean ours = isServer(uri);
                 String path = uri.getPath() == null ? "" : uri.getPath();
                 if (ours && !path.startsWith("/r/")) return false;
                 try {
@@ -163,6 +162,18 @@ public class MainActivity extends Activity {
                 && results[0] == PackageManager.PERMISSION_GRANTED) {
             toast("Storage access allowed — tap Download again");
         }
+    }
+
+    /** Same scheme, host and port as the server; "https://host" and "https://host:443" count as equal. */
+    private static boolean isServer(Uri uri) {
+        return SERVER.getScheme().equalsIgnoreCase(uri.getScheme())
+                && SERVER.getHost().equalsIgnoreCase(uri.getHost())
+                && port(SERVER) == port(uri);
+    }
+
+    private static int port(Uri uri) {
+        if (uri.getPort() != -1) return uri.getPort();
+        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
     }
 
     private void handleIntent(Intent intent) {

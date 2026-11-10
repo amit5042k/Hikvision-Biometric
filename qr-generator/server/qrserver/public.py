@@ -1,5 +1,7 @@
 """What people see when they scan a code: /r/<slug>."""
 import json
+import unicodedata
+from urllib.parse import quote
 
 from flask import Blueprint, Response, current_app, redirect, render_template
 
@@ -46,9 +48,21 @@ def scan_vcard(slug):
         return data, status
     if row["type"] != "vcard":
         return render_template("message.html", title="QR code not found", message="No contact here."), 404
-    name = "".join(ch for ch in row["label"] if ch.isalnum() or ch in " -_").strip() or "contact"
     return Response(vcard(data), mimetype="text/vcard",
-                    headers={"Content-Disposition": f'attachment; filename="{name}.vcf"'})
+                    headers={"Content-Disposition": _attachment(row["label"], ".vcf")})
+
+
+def _attachment(label, ext):
+    """Content-Disposition for a download named after the code's label.
+
+    HTTP headers must be Latin-1, so non-English names (e.g. Hindi) go in the RFC 6266
+    `filename*` field, with an ASCII-only `filename` for old clients.
+    """
+    # keep letters, combining marks (Indic vowel signs), digits, spaces, - and _
+    name = " ".join("".join(ch for ch in label if unicodedata.category(ch)[0] in "LMN" or ch in " -_").split())
+    name = name[:60] or "contact"
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().strip(" -_") or "contact"
+    return f'attachment; filename="{ascii_name}{ext}"; filename*=UTF-8\'\'{quote(name + ext)}'
 
 
 @bp.app_context_processor

@@ -24,7 +24,8 @@
   var state = {
     token: null, account: null, codes: [],
     current: null,            // the saved code being shown/edited, or null for a new one
-    type: 'url', logo: null, logoDataUrl: null, model: null
+    type: 'url', logo: null, logoDataUrl: null, model: null,
+    flash: ''                 // result of the last action ("QR code created."), cleared when another code opens
   };
 
   // ---------------------------------------------------------------- server API
@@ -167,7 +168,7 @@
 
   function buildSvg(model, o) {
     var total = model.length + o.margin * 2;
-    var out = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + total + ' ' + total +
+    var out = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ' + total + ' ' + total +
       '" width="' + o.size + '" height="' + o.size + '" shape-rendering="' +
       (o.style === 'square' ? 'crispEdges' : 'geometricPrecision') + '">' +
       '<rect width="100%" height="100%" fill="' + o.bg + '"/>' +
@@ -175,7 +176,7 @@
     if (state.logo) {
       var b = logoBox(total);
       out += '<path fill="' + o.bg + '" d="' + rrect(b.x - b.pad, b.x - b.pad, b.s + 2 * b.pad, b.s + 2 * b.pad, b.pad) + '"/>' +
-        '<image href="' + state.logoDataUrl + '" x="' + b.x + '" y="' + b.x + '" width="' + b.s + '" height="' + b.s +
+        '<image href="' + state.logoDataUrl + '" xlink:href="' + state.logoDataUrl + '" x="' + b.x + '" y="' + b.x + '" width="' + b.s + '" height="' + b.s +
         '" preserveAspectRatio="xMidYMid meet"/>';
     }
     return out + '</svg>';
@@ -231,7 +232,7 @@
       if (days > 30) {
         badge.textContent = 'Active until ' + formatDate(account.access_until);
       } else {
-        badge.textContent = days <= 1 ? 'Last day of trial' : days + ' days left';
+        badge.textContent = days <= 1 ? 'Last day' : days + ' days left';
         if (days <= 2) badge.classList.add('warn');
       }
       banner.hidden = true;
@@ -291,6 +292,7 @@
 
   function resetEditor() {
     state.current = null;
+    state.flash = '';
     clearFields();
     selectType('url');
     syncEditor();
@@ -300,6 +302,7 @@
 
   function openCode(code) {
     state.current = code;
+    state.flash = '';
     clearFields();
     selectType(code.type);
     Object.keys(code.data).forEach(function (k) {
@@ -333,7 +336,7 @@
       .then(function (r) {
         state.codes = [r.code].concat(state.codes.filter(function (c) { return c.id !== r.code.id; }));
         openCode(r.code);
-        setStatus(editing ? 'Saved. Printed copies of this code now show the new content.' : 'QR code created.');
+        flash(editing ? 'Saved. Printed copies of this code now show the new content.' : 'QR code created.');
       })
       .catch(function (err) {
         $('saveError').textContent = err.message;
@@ -348,7 +351,7 @@
     api('DELETE', '/api/codes/' + code.id).then(function () {
       state.codes = state.codes.filter(function (c) { return c.id !== code.id; });
       resetEditor();
-      setStatus('QR code deleted.');
+      flash('QR code deleted.');
     }, function (err) { $('saveError').textContent = err.message; });
   }
 
@@ -383,6 +386,11 @@
     });
   }
 
+
+  function flash(msg) {
+    state.flash = msg;
+    scheduleRender();
+  }
 
   function setStatus(msg, isError) {
     statusEl.textContent = msg || '';
@@ -419,7 +427,7 @@
       canvas.width = canvas.height = 256;
       ctx.fillStyle = o.bg;
       ctx.fillRect(0, 0, 256, 256);
-      setStatus('');
+      setStatus(state.flash);
       toggleActions(false);
       return;
     }
@@ -447,9 +455,7 @@
     else if (lf > lb) notes.push('Light-on-dark codes may not scan in every app');
     else if ((lb + 0.05) / (lf + 0.05) < 3) notes.push('Low contrast may not scan reliably');
     else warn = false;
-    if (notes.length) setStatus(notes.join(' — '), warn);
-    else if (/^QR code (created|deleted)|^Saved/.test(statusEl.textContent)) { /* keep the save message */ }
-    else setStatus('');
+    setStatus([state.flash].concat(notes).filter(Boolean).join(' — '), warn);
   }
 
   function toggleActions(on) {
@@ -548,7 +554,6 @@
         saveToken(r.token);
         f.elements.password.value = '';
         showAccount(r.account);
-        resetEditor();
         return loadCodes();
       })
       .catch(function (err) { $('authError').textContent = err.message; })
@@ -567,7 +572,7 @@
 
   form.addEventListener('submit', saveCode);
   $('deleteBtn').addEventListener('click', deleteCode);
-  $('newCodeBtn').addEventListener('click', function () { resetEditor(); setStatus(''); });
+  $('newCodeBtn').addEventListener('click', resetEditor);
   design.addEventListener('input', scheduleRender);
   design.addEventListener('change', scheduleRender);
   design.addEventListener('submit', function (e) { e.preventDefault(); });

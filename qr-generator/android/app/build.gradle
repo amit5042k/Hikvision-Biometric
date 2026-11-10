@@ -18,6 +18,9 @@ android {
         // or the QR_SERVER_URL environment variable (used by the GitHub Action).
         def serverUrl = (project.findProperty('qrServerUrl') ?: System.getenv('QR_SERVER_URL') ?: 'https://qr.example.com')
                 .toString().replaceAll('/+$', '')
+        if (!(serverUrl ==~ /^https?:\/\/[^\/\s]+$/)) {
+            throw new GradleException("qrServerUrl must look like https://qr.yourdomain.com (got '${serverUrl}')")
+        }
         buildConfigField 'String', 'SERVER_URL', "\"${serverUrl}\""
     }
 

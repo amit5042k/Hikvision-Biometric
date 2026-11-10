@@ -54,3 +54,14 @@ def test_vcard_download(client, auth, conn):
 def test_website_is_served(client):
     assert b"QR Generator" in client.get("/").data
     assert client.get("/app.js").status_code == 200
+
+
+def test_vcard_download_with_non_english_name(client, auth):
+    # Regression: a Hindi label put non-Latin-1 text in Content-Disposition and the real server returned 500.
+    for label, ascii_name, utf8_name in (("अमित वर्मा", "contact.vcf", "%E0%A4%85%E0%A4%AE%E0%A4%BF%E0%A4%A4%20"),
+                                         ('José "Pepe" / Ltd', "Jose Pepe Ltd.vcf", "Jos%C3%A9%20Pepe%20Ltd.vcf")):
+        code = make(client, auth, "vcard", {"firstName": "A"}, label=label).get_json()["code"]
+        header = client.get(f'/r/{code["slug"]}.vcf').headers["Content-Disposition"]
+        header.encode("latin-1")  # what the WSGI server has to do
+        assert f'filename="{ascii_name}"' in header
+        assert "filename*=UTF-8''" + utf8_name in header
