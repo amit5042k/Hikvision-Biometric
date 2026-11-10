@@ -1,6 +1,6 @@
 # Classroom attendance with the IFP camera (Android panels)
 
-This module uses the camera on each classroom **interactive flat panel (IFP)** to
+This app uses the camera on each classroom **interactive flat panel (IFP)** to
 recognise students and teachers by face. It records when each person **enters**
 and **leaves** the room and keeps a daily and monthly attendance register. You
 view and download the records from any PC in the school.
@@ -28,9 +28,9 @@ on the panel except a browser.
 
 ## 1. The server
 
-Run the app on an always-on PC or server on the school network, or use the
-hosted copy (see the main [README](../README.md)). Every panel and your PC must
-be able to open its address, e.g. `http://192.168.1.10:5000`.
+Run the app on an always-on PC or server on the school network (see
+[README](../README.md) → *Installing the server*). Every panel and your PC must
+be able to open its address, e.g. `http://192.168.1.10:8000`.
 
 > **Tip:** Android Chrome only gives a web page the camera when the page is
 > **HTTPS**. If your server already has an `https://` address (hosted online,
@@ -42,7 +42,7 @@ be able to open its address, e.g. `http://192.168.1.10:5000`.
 1. Sign in as admin. Open **Classroom → Classrooms**.
 2. **Add classroom** for each room with a panel, e.g. `Class 8-A`.
 3. Optional: add **timetable periods**. The register then shows who was present in each period.
-4. Under **Weekly off**, tick the school's weekly off days. Holidays come from the existing **Holidays** page.
+4. Under **Weekly off**, tick the school's weekly off days. Add holidays on the **Holidays** page.
 5. Open **Students & Teachers**. Add people one at a time, or **Import from CSV** with these columns:
 
    | Number | Name | Role | Class | Classroom | Active |
@@ -74,7 +74,7 @@ numbers) and a small thumbnail, never the original photo.
 2. **Plain `http://` server only:** allow the camera for your server.
    1. In Chrome, open `chrome://flags`.
    2. Search for **Insecure origins treated as secure**.
-   3. Enter the server address exactly, e.g. `http://192.168.1.10:5000`.
+   3. Enter the server address exactly, e.g. `http://192.168.1.10:8000`.
    4. Set it to **Enabled** and tap **Relaunch**.
 3. On your PC, copy the room's **kiosk link** from **Classrooms**. Open it in
    Chrome on that room's panel. When asked, tap **Allow** for the camera.
@@ -132,7 +132,7 @@ Open the server address in any browser on your PC and sign in.
 | **Monthly Register** | P/A/H/WO grid per student for the month, totals and attendance % | Excel, CSV |
 | **Students & Teachers** → person | their face photos and entries/exits on any day | |
 
-Class teachers can get **viewer** logins (Settings → Users). Viewers see all
+Class teachers and the principal can get **viewer** logins (Settings → Users & logins). Viewers see all
 reports but cannot change anything.
 
 ## 5. Privacy and limits (please read)

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Audit log{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Audit log</h1><div class="muted">Who changed what. The latest 500 entries are shown.</div></div>
+  <a class="btn" href="{{ url_for('admin.audit_log', q=q, export=1) }}">Export CSV</a>
+</div>
+<div class="card">
+  <form class="filters" method="get">
+    <label>Search<input name="q" value="{{ q }}" placeholder="User, action or text"></label>
+    <button class="btn" type="submit">Filter</button>
+  </form>
+</div>
+<div class="card">
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr><td class="small">{{ r.at }}</td><td>{{ r.username or '—' }}</td><td><code>{{ r.action }}</code></td><td class="wrap small">{{ r.details or '' }}</td></tr>
+    {% else %}<tr><td colspan="4" class="muted">Nothing recorded yet.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

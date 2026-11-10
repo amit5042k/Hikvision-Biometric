@@ -1,0 +1,5 @@
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+{% macro badge(day) %}{% if day.status != '-' %}<span class="badge s-{{ day.status }}" title="{{ day.label }}">{{ day.status }}</span>{% else %}<span class="muted">–</span>{% endif %}{% endmacro %}
+{% macro post_button(action, label, cls='btn sm', confirm=None) %}
+<form method="post" action="{{ action }}" class="inline"{% if confirm %} data-confirm="{{ confirm }}"{% endif %}>{{ csrf() }}<button class="{{ cls }}" type="submit">{{ label }}</button></form>
+{% endmacro %}

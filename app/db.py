@@ -25,10 +25,6 @@ DEFAULT_SETTINGS = {
     "report_recipients": "",         # comma separated
     "report_time": "19:00",          # when the daily summary is sent (server local time)
     "report_last_sent": "",
-    # classroom face recognition (IFP camera kiosks)
-    "class_match_threshold": "0.5",  # max face-descriptor distance for a match (lower = stricter)
-    "class_detector": "ssd",         # ssd (accurate, small/far faces) | tiny (fast, weaker hardware)
-    "class_weekly_off": "6",         # school weekly-off weekdays, Mon=0 .. Sun=6, comma separated
 }
 
 # Schema changes after the first release.
@@ -103,51 +99,6 @@ MIGRATIONS = [
             details  TEXT
         );
         CREATE INDEX idx_audit_at ON audit_log (at);
-    """),
-    (5, """
-        -- classroom attendance from interactive-flat-panel (IFP) cameras
-        CREATE TABLE classrooms (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            name            TEXT NOT NULL UNIQUE,
-            kiosk_token     TEXT NOT NULL UNIQUE,      -- secret part of the kiosk URL
-            absence_minutes INTEGER NOT NULL DEFAULT 10, -- unseen this long = left the class
-            enabled         INTEGER NOT NULL DEFAULT 1,
-            last_seen_at    TEXT,                       -- last kiosk check-in
-            created_at      TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-        );
-        CREATE TABLE class_persons (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            person_no    TEXT NOT NULL UNIQUE,          -- admission / staff number
-            name         TEXT NOT NULL,
-            role         TEXT NOT NULL DEFAULT 'student',  -- student | teacher
-            class_name   TEXT,                          -- e.g. 8-A
-            classroom_id INTEGER REFERENCES classrooms(id) ON DELETE SET NULL,  -- home classroom
-            active       INTEGER NOT NULL DEFAULT 1,
-            created_at   TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-        );
-        CREATE TABLE face_samples (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            person_id  INTEGER NOT NULL REFERENCES class_persons(id) ON DELETE CASCADE,
-            descriptor TEXT NOT NULL,                   -- JSON array of 128 floats
-            thumbnail  TEXT,                            -- small JPEG data URL of the face
-            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-        );
-        CREATE INDEX idx_face_samples_person ON face_samples (person_id);
-        CREATE TABLE class_sightings (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            classroom_id INTEGER NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
-            person_id    INTEGER NOT NULL REFERENCES class_persons(id) ON DELETE CASCADE,
-            seen_at      TEXT NOT NULL,                 -- server local time, YYYY-MM-DD HH:MM:SS
-            distance     REAL
-        );
-        CREATE INDEX idx_sightings_room ON class_sightings (classroom_id, seen_at);
-        CREATE INDEX idx_sightings_person ON class_sightings (person_id, seen_at);
-        CREATE TABLE class_periods (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            name       TEXT NOT NULL,
-            start_time TEXT NOT NULL,                   -- HH:MM
-            end_time   TEXT NOT NULL
-        );
     """),
 ]
 SCHEMA_VERSION = MIGRATIONS[-1][0] if MIGRATIONS else 1

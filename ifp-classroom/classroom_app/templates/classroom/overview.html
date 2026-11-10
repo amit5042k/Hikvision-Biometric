@@ -110,7 +110,7 @@
       <div class="full"><div class="small muted" style="font-weight:600">School weekly off</div>
         <div class="days-pick">{% for d in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
           <label class="check"><input type="checkbox" name="off_{{ loop.index0 }}" {{ 'checked' if loop.index0|string in offs }} {{ 'disabled' if user.role != 'admin' }}> {{ d }}</label>{% endfor %}</div>
-        <div class="small muted">Holidays come from the Holidays page.</div>
+        <div class="small muted">Holidays are set on the <a href="{{ url_for('admin.holidays') }}">Holidays</a> page.</div>
       </div>
       {% if user.role == 'admin' %}<div class="full"><button class="btn primary" type="submit">Save settings</button></div>{% endif %}
     </form>
@@ -121,7 +121,7 @@
   <h2>How it works</h2>
   <ol class="small">
     <li>Add each classroom here. Add students and teachers under <a href="{{ url_for('classroom.people') }}">Students &amp; Teachers</a> (one by one or from a CSV), and give each one or more face photos.</li>
-    <li>On each Android panel, open that room's kiosk link in Chrome and allow the camera (setup steps: <code>docs/CLASSROOM_IFP.md</code>). Android turns the camera off for apps in the background, so keep the kiosk visible: full screen at the start of the class, or in split screen / a floating window beside the lesson.</li>
+    <li>On each Android panel, open that room's kiosk link in Chrome and allow the camera (setup steps: <code>docs/SETUP.md</code>). Android turns the camera off for apps in the background, so keep the kiosk visible: full screen at the start of the class, or in split screen / a floating window beside the lesson.</li>
     <li>The panel recognises faces itself and sends "seen" records to this server. Someone's <b>entry</b> is the first time they are seen; their <b>exit</b> is recorded once they have not been seen for the minutes set for that room.</li>
     <li>View and download the class register, entry/exit log and monthly register from any PC in the school.</li>
   </ol>

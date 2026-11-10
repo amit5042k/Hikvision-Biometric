@@ -37,9 +37,8 @@ def create_app(test_config=None):
     dbmod.init_db(app.config["DATABASE"], app.config["BACKUP_DIR"])
     app.teardown_appcontext(dbmod.close_db)
 
-    from . import bridge_api, classroom_routes, portal, routes
+    from . import bridge_api, portal, routes
     app.register_blueprint(routes.bp)
-    app.register_blueprint(classroom_routes.bp)
     app.register_blueprint(bridge_api.bp)
     app.register_blueprint(portal.bp)
 
@@ -87,8 +86,6 @@ EMPLOYEE_ENDPOINTS = {
     "static", "main.login", "main.logout", "main.settings",
     "portal.my_attendance", "portal.my_leave", "portal.my_leave_cancel",
     "portal.my_corrections", "portal.my_correction_cancel",
-    # classroom kiosks authenticate with the secret in their URL, not a login
-    "classroom.kiosk", "classroom.kiosk_roster", "classroom.kiosk_sightings",
 }
 
 

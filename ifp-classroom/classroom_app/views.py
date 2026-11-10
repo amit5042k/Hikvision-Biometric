@@ -1,4 +1,4 @@
-"""Web pages and kiosk API for classroom face-recognition attendance."""
+"""Classroom pages, enrolment and the kiosk API used by the panels."""
 import csv
 import io
 import json
@@ -10,9 +10,8 @@ from datetime import date, datetime, timedelta
 from flask import Blueprint, Response, abort, flash, g, jsonify, redirect, render_template, request, url_for
 
 from . import admin_required, staff_required
-from . import classroom as cl
+from . import engine as cl
 from . import db as dbmod
-from .attendance import parse_date
 from .db import get_db
 
 bp = Blueprint("classroom", __name__)
@@ -20,6 +19,13 @@ bp = Blueprint("classroom", __name__)
 ROLES = {"student": "Student", "teacher": "Teacher"}
 MAX_THUMBNAIL = 80_000
 MAX_FACES_PER_PERSON = 10
+
+
+def parse_date(value, default=None):
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return default
 
 
 def _int(value, default=None):
@@ -46,7 +52,7 @@ def _csv(filename, header, rows):
 
 def _xlsx(filename, title, header, rows, fills=None):
     from .excel import table_workbook
-    data = table_workbook(title, header, rows, dbmod.get_setting(get_db(), "company_name"), fills=fills)
+    data = table_workbook(title, header, rows, dbmod.get_setting(get_db(), "school_name"), fills=fills)
     return Response(data, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     headers={"Content-Disposition": f"attachment; filename={filename}"})
 

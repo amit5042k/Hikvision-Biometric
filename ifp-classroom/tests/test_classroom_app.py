@@ -1,4 +1,4 @@
-"""Classroom face-recognition attendance: kiosk API, entry/exit sessions, registers, exports."""
+"""IFP Classroom Attendance: kiosk API, entry/exit sessions, registers, exports, admin."""
 import io
 import json
 from datetime import date, datetime, timedelta
@@ -6,8 +6,8 @@ from datetime import date, datetime, timedelta
 import pytest
 from openpyxl import load_workbook
 
-from app import classroom as cl
-from tests.conftest import csrf_from
+from classroom_app import engine as cl
+from conftest import login_as
 
 VEC = [0.01 * i for i in range(128)]
 
@@ -211,7 +211,6 @@ def test_new_kiosk_link_invalidates_old(logged_in, school):
 
 
 def test_viewer_can_view_but_not_change(app, logged_in, conn):
-    from tests.test_features import login_as
     from werkzeug.security import generate_password_hash
     conn.execute("INSERT INTO users (username, password_hash, role) VALUES ('v', ?, 'viewer')",
                  (generate_password_hash("secret1"),))

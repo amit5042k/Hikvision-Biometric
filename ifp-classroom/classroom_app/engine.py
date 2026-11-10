@@ -2,8 +2,8 @@
 
 The kiosk page running on each classroom panel recognises faces in the browser
 and reports *sightings* (person X seen in classroom Y at time T). Everything
-else is derived from those raw sightings, the same way employee attendance is
-derived from raw punches:
+else is derived from those raw sightings, so changing a classroom's settings,
+a holiday or a person's details corrects every report straight away:
 
 * A **presence session** is a run of sightings of one person in one classroom
   where no gap is longer than the classroom's ``absence_minutes``. The first

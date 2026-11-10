@@ -42,17 +42,6 @@ It pulls punches from the terminal over the LAN, applies shifts, holidays and le
   - Sign-in lockout after repeated failures, CSRF-protected forms.
   - Responsive layout that works on phones.
 
-## Classroom attendance with IFP cameras (students and teachers)
-
-A second module records school attendance with the camera on each classroom **interactive flat panel**. It works on Android-only panels; nothing is installed on the panel except Chrome.
-
-- The panel recognises enrolled students and teachers **in the browser**, so no video leaves the room. It records each person's **entry** and **exit**.
-- **Class register** per room and day shows first entry, last exit, time in class and per-period attendance. The **monthly register** shows attendance %. The **entry/exit log** lists every movement. Excel and CSV downloads are on each page.
-- **Enrolment:** add people one by one or from a CSV. Photos can be added in bulk (named by admission number) or taken with a camera.
-- The panel shows who is in class now. Records are kept and sent later if the network drops.
-
-Setup, Android steps, accuracy tips and privacy notes: **[docs/CLASSROOM_IFP.md](docs/CLASSROOM_IFP.md)**.
-
 ## Quick start
 
 Requires Python 3.10 or later.
@@ -142,10 +131,6 @@ deploy/            GoDaddy / VPS deployment, update and backup scripts
 passenger_wsgi.py  entry point for cPanel "Setup Python App"
 app/attendance.py  attendance rules engine
 app/routes.py      web UI and CSV exports
-app/classroom.py   classroom engine: sightings -> entry/exit sessions, registers
-app/classroom_routes.py  classroom pages, enrolment, kiosk API
-app/static/faceapi/      face-api (MIT) and its models, served locally for offline use
-app/static/classroom/    kiosk and enrolment JavaScript
 app/templates/     Jinja templates
 run.py             production entry point (waitress + scheduler)
 ```

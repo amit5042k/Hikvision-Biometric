@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Settings</h1></div>
+<div class="grid grid-2">
+{% if user.role == 'admin' %}
+  <div class="card">
+    <h2>School</h2>
+    <form method="post" class="form-grid">{{ csrf() }}<input type="hidden" name="form" value="general">
+      <label class="full">School name<input name="school_name" value="{{ settings.school_name }}" required></label>
+      <div class="full"><button class="btn primary" type="submit">Save</button></div>
+    </form>
+    <p class="muted small" style="margin-top:14px">Face recognition settings and weekly offs are on the <a href="{{ url_for('classroom.overview') }}">Classrooms</a> page.</p>
+  </div>
+  <div class="card">
+    <h2>Backup</h2>
+    <p class="muted small">Downloads a complete copy of the database: classrooms, students, teachers, face data, entry/exit records and logins. Keep it somewhere safe; it contains biometric data.</p>
+    <a class="btn" href="{{ url_for('admin.download_backup') }}">Download backup</a>
+  </div>
+{% endif %}
+  <div class="card">
+    <h2>Change your password</h2>
+    <form method="post" class="form-grid">{{ csrf() }}<input type="hidden" name="form" value="password">
+      <label class="full">Current password<input type="password" name="current_password" required></label>
+      <label>New password<input type="password" name="new_password" minlength="6" required></label>
+      <label>Confirm<input type="password" name="confirm_password" minlength="6" required></label>
+      <div class="full"><button class="btn primary" type="submit">Change password</button></div>
+    </form>
+  </div>
+</div>
+{% if user.role == 'admin' %}
+<div class="card">
+  <h2>Users &amp; logins</h2>
+  <p class="muted small"><b>Admin</b>: everything · <b>Viewer</b>: read-only reports (e.g. class teachers, principal).</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Username</th><th>Role</th><th>Change role</th><th>Reset password</th><th></th></tr></thead>
+    <tbody>
+    {% for u in users %}
+      <tr>
+        <td><b>{{ u.username }}</b>{% if u.id == user.id %} <span class="muted small">(you)</span>{% endif %}</td>
+        <td><span class="badge">{{ roles[u.role] }}</span></td>
+        <td><form method="post" class="inline-form">{{ csrf() }}<input type="hidden" name="form" value="set_role"><input type="hidden" name="user_id" value="{{ u.id }}">
+          <select name="role">{% for k, v in roles.items() %}<option value="{{ k }}" {{ 'selected' if k == u.role }}>{{ v }}</option>{% endfor %}</select>
+          <button class="btn sm" type="submit">Set</button></form></td>
+        <td><form method="post" class="inline-form">{{ csrf() }}<input type="hidden" name="form" value="reset_password"><input type="hidden" name="user_id" value="{{ u.id }}">
+          <input type="password" name="new_password" minlength="6" placeholder="new password" required size="12">
+          <button class="btn sm" type="submit">Reset</button></form></td>
+        <td>{% if u.id != user.id %}<form method="post" class="inline" data-confirm="Delete user {{ u.username }}?">{{ csrf() }}<input type="hidden" name="form" value="delete_user"><input type="hidden" name="user_id" value="{{ u.id }}"><button class="btn sm danger" type="submit">Delete</button></form>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <form method="post" class="filters" style="margin-top:14px">{{ csrf() }}<input type="hidden" name="form" value="user">
+    <label>Username<input name="username" required></label>
+    <label>Password<input type="password" name="password" minlength="6" required></label>
+    <label>Role<select name="role">{% for k, v in roles.items() %}<option value="{{ k }}" {{ 'selected' if k == 'viewer' }}>{{ v }}</option>{% endfor %}</select></label>
+    <button class="btn primary" type="submit">Add user</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}
