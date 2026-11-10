@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>{{ room.name }} · Classroom camera</title>
+  <style>
+    :root { --bg: #0e1118; --panel: #171c27; --text: #e8ecf3; --muted: #8d96a8; --ok: #2fbf71; --bad: #f05454; --info: #4c9aff; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+    .wrap { display: grid; grid-template-columns: 1fr 340px; height: 100vh; }
+    .stage { position: relative; background: #000; min-width: 0; }
+    video, canvas#overlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+    video { transform: scaleX(-1); }
+    canvas#overlay { pointer-events: none; }
+    .top { position: absolute; left: 0; right: 0; top: 0; padding: 12px 16px; display: flex; justify-content: space-between; gap: 12px; background: linear-gradient(#000a, #0000); z-index: 2; }
+    .room { font-size: 22px; font-weight: 700; }
+    .clock { font-size: 22px; font-variant-numeric: tabular-nums; }
+    .side { background: var(--panel); display: flex; flex-direction: column; min-height: 0; border-left: 1px solid #262d3c; }
+    .side h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 14px 16px 6px; display: flex; justify-content: space-between; }
+    .count { font-size: 44px; font-weight: 700; color: var(--ok); margin: 0 16px; line-height: 1; }
+    .list { overflow: auto; padding: 0 10px; }
+    .who { display: flex; justify-content: space-between; gap: 8px; padding: 6px; border-bottom: 1px solid #222938; font-size: 14px; }
+    .who small { color: var(--muted); }
+    .tag { font-size: 11px; padding: 1px 6px; border-radius: 9px; background: #263048; color: #b8c6e6; margin-left: 4px; }
+    .ev-in { color: var(--ok); } .ev-out { color: var(--bad); }
+    .grow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .foot { padding: 10px 16px; font-size: 12px; color: var(--muted); border-top: 1px solid #262d3c; }
+    .foot .err { color: var(--bad); }
+    .btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+    button, select { font: inherit; font-size: 12px; background: #222938; color: var(--text); border: 1px solid #333c50; border-radius: 6px; padding: 4px 8px; cursor: pointer; max-width: 100%; }
+    .msg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 30px; font-size: 18px; z-index: 3; }
+    .msg[hidden] { display: none; }
+    .msg div { max-width: 640px; background: #000c; padding: 20px 24px; border-radius: 12px; }
+    body.compact .wrap { grid-template-columns: 1fr; grid-template-rows: 45vh 1fr; }
+    body.compact .side { border-left: 0; }
+    body.compact .room, body.compact .clock { font-size: 16px; }
+    @media (max-width: 760px) { .wrap { grid-template-columns: 1fr; grid-template-rows: 50vh 1fr; } }
+  </style>
+</head>
+<body data-face-models="{{ url_for('static', filename='faceapi/model') }}">
+<div class="wrap">
+  <div class="stage">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
+    <div class="top"><div class="room">{{ room.name }}</div><div class="clock" id="clock"></div></div>
+    <div class="msg" id="msg"><div>Starting the classroom camera…</div></div>
+  </div>
+  <div class="side">
+    <h2><span>In class now</span><span id="total"></span></h2>
+    <div class="count" id="count">0</div>
+    <div class="grow"><div class="list" id="present"></div></div>
+    <h2>Entries &amp; exits</h2>
+    <div class="grow" style="flex:.8"><div class="list" id="events"></div></div>
+    <div class="foot">
+      <div id="status">Loading…</div>
+      <div class="btns">
+        <select id="camera" title="Camera"></select>
+        <button id="fs" type="button">Full screen</button>
+        <button id="compact" type="button">Compact</button>
+        <button id="boxes" type="button">Hide boxes</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  window.KIOSK = {
+    roster: {{ url_for('classroom.kiosk_roster', token=token)|tojson }},
+    sightings: {{ url_for('classroom.kiosk_sightings', token=token)|tojson }},
+    key: {{ ('kiosk-' ~ room.id)|tojson }}
+  };
+</script>
+<script src="{{ url_for('static', filename='faceapi/face-api.js') }}"></script>
+<script src="{{ url_for('static', filename='classroom/faces.js') }}"></script>
+<script src="{{ url_for('static', filename='classroom/kiosk.js') }}"></script>
+</body>
+</html>

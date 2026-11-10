@@ -134,3 +134,14 @@ td.wrap code { word-break: break-all; }
 .bal-low { color: var(--bad); font-weight: 700; }
 .inline-form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .inline-form input { padding: 4px 8px; }
+
+/* classroom */
+.faces { display: flex; flex-wrap: wrap; gap: 12px; }
+.faces .face { width: 112px; text-align: center; font-size: 11px; color: var(--muted); }
+.faces .face img { width: 112px; height: 112px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); display: block; margin-bottom: 4px; background: #eef0f4; }
+.enroll-video { width: 100%; max-width: 480px; border-radius: 8px; background: #000; display: block; }
+.copy-link { width: 100%; font-family: ui-monospace, monospace; font-size: 12px; }
+.ev-Entry { color: var(--ok); font-weight: 600; }
+.ev-Exit { color: var(--bad); font-weight: 600; }
+.log-list { max-height: 360px; overflow: auto; font-size: 12px; }
+.log-list .ok { color: var(--ok); } .log-list .bad { color: var(--bad); }

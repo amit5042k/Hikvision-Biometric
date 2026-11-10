@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}{{ 'Edit' if person.id else 'Add' }} person{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{{ 'Edit ' ~ person.name if person.id else 'Add student or teacher' }}</h1></div></div>
+<div class="card">
+  <form method="post" class="form-grid">{{ csrf() }}
+    <label>Admission / staff number<input name="person_no" value="{{ person.person_no or '' }}" required></label>
+    <label>Full name<input name="name" value="{{ person.name or '' }}" required></label>
+    <label>Role<select name="role">{% for k, v in roles.items() %}<option value="{{ k }}" {{ 'selected' if person.role == k }}>{{ v }}</option>{% endfor %}</select></label>
+    <label>Class / section<input name="class_name" value="{{ person.class_name or '' }}" placeholder="e.g. 8-A"></label>
+    <label>Home classroom<select name="classroom_id"><option value="">— none —</option>
+      {% for r in rooms %}<option value="{{ r.id }}" {{ 'selected' if person.classroom_id|string == r.id|string }}>{{ r.name }}</option>{% endfor %}</select>
+      <span class="small muted" style="font-weight:400">Students are marked absent in this room's register when not seen. For teachers, leave empty or pick their class-teacher room.</span></label>
+    <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if person.active }}> Active</label>
+    <div class="full actions"><button class="btn primary" type="submit">Save</button>
+      <a class="btn" href="{{ url_for('classroom.people') }}">Cancel</a></div>
+  </form>
+</div>
+{% endblock %}

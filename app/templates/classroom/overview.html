@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, post_button %}
+{% block title %}Classrooms{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Classrooms</h1><div class="muted">Face-recognition attendance from the camera on each interactive flat panel (IFP).</div></div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('classroom.register') }}">Today's class register</a>
+    <a class="btn" href="{{ url_for('classroom.movements') }}">Entry / exit log</a>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat info"><div class="num">{{ counts.student.n if counts.student else 0 }}</div><div class="lbl">Students</div></div>
+  <div class="stat {{ 'ok' if counts.student and counts.student.enrolled == counts.student.n else 'warn' }}"><div class="num">{{ counts.student.enrolled if counts.student else 0 }}</div><div class="lbl">Students with face</div></div>
+  <div class="stat info"><div class="num">{{ counts.teacher.n if counts.teacher else 0 }}</div><div class="lbl">Teachers</div></div>
+  <div class="stat {{ 'ok' if counts.teacher and counts.teacher.enrolled == counts.teacher.n else 'warn' }}"><div class="num">{{ counts.teacher.enrolled if counts.teacher else 0 }}</div><div class="lbl">Teachers with face</div></div>
+</div>
+
+<div class="card">
+  <h2>Classrooms and their panels</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Classroom</th><th>Panel</th><th class="num">In class now</th><th class="num">Present today</th><th>Leaves after</th><th>Kiosk link (open this on the IFP)</th><th></th></tr></thead>
+    <tbody>
+    {% for r in rooms %}
+      <tr>
+        <td><a href="{{ url_for('classroom.register', classroom=r.room.id) }}"><b>{{ r.room.name }}</b></a>{% if not r.room.enabled %} <span class="badge">disabled</span>{% endif %}</td>
+        <td><span class="dot {{ 'ok' if r.status == 'online' else 'error' if r.status == 'offline' }}"></span>{{ r.status }}
+          {% if r.room.last_seen_at %}<div class="small muted">{{ r.room.last_seen_at }}</div>{% endif %}</td>
+        <td class="num">{{ r.in_class }}</td>
+        <td class="num">{{ r.present }} / {{ r.expected }}</td>
+        <td>{{ r.room.absence_minutes }} min unseen</td>
+        <td style="min-width:280px">
+          {% if user.role == 'admin' %}
+          <input class="copy-link" readonly value="{{ r.kiosk_url }}" onclick="this.select()">
+          {% else %}<span class="muted small">admins only</span>{% endif %}
+        </td>
+        <td class="actions">
+          {% if user.role == 'admin' %}
+          <a class="btn sm" href="{{ r.kiosk_url }}" target="_blank">Open kiosk</a>
+          <details><summary class="small">Edit</summary>
+            <form method="post" action="{{ url_for('classroom.room_save') }}" class="inline-form" style="margin-top:6px">{{ csrf() }}
+              <input type="hidden" name="id" value="{{ r.room.id }}">
+              <input name="name" value="{{ r.room.name }}" required size="10">
+              <input type="number" name="absence_minutes" value="{{ r.room.absence_minutes }}" min="1" max="240" style="width:70px" title="minutes unseen before an exit is recorded">
+              <select name="enabled"><option value="1">enabled</option><option value="0" {{ 'selected' if not r.room.enabled }}>disabled</option></select>
+              <button class="btn sm" type="submit">Save</button>
+            </form>
+            <div style="margin-top:6px">
+            {{ post_button(url_for('classroom.room_token', room_id=r.room.id), 'New link', 'btn sm', 'Create a new kiosk link? The panel must be updated to the new link.') }}
+            {{ post_button(url_for('classroom.room_delete', room_id=r.room.id), 'Delete', 'btn sm danger', 'Delete this classroom and ALL its entry/exit records?') }}
+            </div>
+          </details>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="muted">No classrooms yet. Add one below, then open its kiosk link on that room's panel.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if user.role == 'admin' %}
+  <form method="post" action="{{ url_for('classroom.room_save') }}" class="filters" style="margin-top:14px">{{ csrf() }}
+    <label>New classroom<input name="name" placeholder="e.g. Class 8-A" required></label>
+    <label>Exit after unseen for (minutes)<input type="number" name="absence_minutes" value="10" min="1" max="240"></label>
+    <button class="btn primary" type="submit">Add classroom</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <h2>Timetable periods</h2>
+    <p class="muted small">Optional. When periods are set, the class register also shows who was present in each period.</p>
+    <table>
+      <thead><tr><th>Period</th><th>From</th><th>To</th><th></th></tr></thead>
+      <tbody>
+      {% for p in periods %}
+        <tr><td>{{ p.name }}</td><td>{{ p.start_time }}</td><td>{{ p.end_time }}</td>
+          <td>{% if user.role == 'admin' %}{{ post_button(url_for('classroom.period_delete', period_id=p.id), 'Delete', 'btn sm danger', 'Delete this period?') }}{% endif %}</td></tr>
+      {% else %}<tr><td colspan="4" class="muted">No periods.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    {% if user.role == 'admin' %}
+    <form method="post" action="{{ url_for('classroom.period_add') }}" class="filters" style="margin-top:12px">{{ csrf() }}
+      <label>Name<input name="name" placeholder="Period 1" required size="10"></label>
+      <label>From<input type="time" name="start_time" required></label>
+      <label>To<input type="time" name="end_time" required></label>
+      <button class="btn" type="submit">Add</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Recognition settings</h2>
+    {% set offs = settings.class_weekly_off.split(',') %}
+    <form method="post" action="{{ url_for('classroom.settings_save') }}" class="form-grid">{{ csrf() }}
+      <label>Match strictness (0.30 – 0.70)
+        <input type="number" step="0.01" min="0.3" max="0.7" name="class_match_threshold" value="{{ settings.class_match_threshold }}" {{ 'disabled' if user.role != 'admin' }}>
+        <span class="small muted" style="font-weight:400">Lower is stricter. 0.50 suits most rooms; try 0.45 if people are mixed up, 0.55 if they are often not recognised.</span>
+      </label>
+      <label>Face detector
+        <select name="class_detector" {{ 'disabled' if user.role != 'admin' }}>
+          <option value="ssd" {{ 'selected' if settings.class_detector == 'ssd' }}>Accurate (finds small, far-away faces)</option>
+          <option value="tiny" {{ 'selected' if settings.class_detector == 'tiny' }}>Fast (for slower panels)</option>
+        </select>
+      </label>
+      <div class="full"><div class="small muted" style="font-weight:600">School weekly off</div>
+        <div class="days-pick">{% for d in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
+          <label class="check"><input type="checkbox" name="off_{{ loop.index0 }}" {{ 'checked' if loop.index0|string in offs }} {{ 'disabled' if user.role != 'admin' }}> {{ d }}</label>{% endfor %}</div>
+        <div class="small muted">Holidays come from the Holidays page.</div>
+      </div>
+      {% if user.role == 'admin' %}<div class="full"><button class="btn primary" type="submit">Save settings</button></div>{% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h2>How it works</h2>
+  <ol class="small">
+    <li>Add each classroom here. Add students and teachers under <a href="{{ url_for('classroom.people') }}">Students &amp; Teachers</a> (one by one or from a CSV), and give each one or more face photos.</li>
+    <li>On each Android panel, open that room's kiosk link in Chrome and allow the camera (setup steps: <code>docs/CLASSROOM_IFP.md</code>). Android turns the camera off for apps in the background, so keep the kiosk visible: full screen at the start of the class, or in split screen / a floating window beside the lesson.</li>
+    <li>The panel recognises faces itself and sends "seen" records to this server. Someone's <b>entry</b> is the first time they are seen; their <b>exit</b> is recorded once they have not been seen for the minutes set for that room.</li>
+    <li>View and download the class register, entry/exit log and monthly register from any PC in the school.</li>
+  </ol>
+</div>
+{% endblock %}

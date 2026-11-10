@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Monthly register{% endblock %}
+{% block content %}
+{% set qs = dict(month=month, classroom=room_id or '', class_name=class_name, role=role) %}
+<div class="page-head">
+  <div><h1>Monthly attendance register</h1><div class="muted">{{ month_label }} · present on a day = seen by any classroom panel that day</div></div>
+  <div class="actions no-print">
+    <a class="btn" href="{{ url_for('classroom.monthly', export='xlsx', **qs) }}">Excel</a>
+    <a class="btn" href="{{ url_for('classroom.monthly', export='csv', **qs) }}">CSV</a>
+    <button class="btn" onclick="window.print()">Print</button>
+  </div>
+</div>
+<div class="card no-print">
+  <form class="filters" method="get">
+    <label>Month<input type="month" name="month" value="{{ month }}"></label>
+    <label>Class<select name="class_name"><option value="">All</option>{% for c in class_names %}<option {{ 'selected' if c == class_name }}>{{ c }}</option>{% endfor %}</select></label>
+    <label>Home classroom<select name="classroom"><option value="">All</option>{% for r in rooms %}<option value="{{ r.id }}" {{ 'selected' if r.id == room_id }}>{{ r.name }}</option>{% endfor %}</select></label>
+    <label>Show<select name="role">{% for k, v in roles.items() %}<option value="{{ k }}" {{ 'selected' if k == role }}>{{ v }}s</option>{% endfor %}<option value="all" {{ 'selected' if not role }}>Everyone</option></select></label>
+    <button class="btn" type="submit">Show</button>
+  </form>
+</div>
+<div class="card">
+  <div class="table-wrap">
+  <table class="muster">
+    <thead><tr><th class="name">Name</th><th>Class</th>
+      {% for d in days %}<th class="{{ 'we' if d.weekday() == 6 }}">{{ d.day }}<br><span class="small">{{ d.strftime('%a')[:2] }}</span></th>{% endfor %}
+      <th>P</th><th>A</th><th>%</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr><td class="name"><a href="{{ url_for('classroom.person_detail', person_id=r.person.id) }}">{{ r.person.name }}</a> <span class="muted small">{{ r.person.person_no }}</span></td>
+        <td>{{ r.person.class_name or '' }}</td>
+        {% for m in r.marks %}<td>{% if m != '-' %}<span class="badge s-{{ m }}">{{ m }}</span>{% endif %}</td>{% endfor %}
+        <td><b>{{ r.present }}</b></td><td>{{ r.absent }}</td><td>{{ '' if r.percent is none else r.percent }}</td></tr>
+    {% else %}<tr><td colspan="{{ days|length + 5 }}" class="muted">Nobody matches.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted small">P Present · A Absent · H Holiday · WO Weekly off. % = present ÷ working days so far.</p>
+</div>
+{% endblock %}

@@ -25,6 +25,12 @@
       <a href="{{ url_for('main.punches') }}" class="{{ 'active' if ep == 'main.punches' }}">Punch Log</a>
       <a href="{{ url_for('main.leaves') }}" class="{{ 'active' if ep == 'main.leaves' }}">Leaves</a>
       <a href="{{ url_for('main.requests_page') }}" class="{{ 'active' if ep == 'main.requests_page' }}">Requests{% if pending_requests %} <span class="count">{{ pending_requests }}</span>{% endif %}</a>
+      <div class="sep">Classroom (IFP camera)</div>
+      <a href="{{ url_for('classroom.overview') }}" class="{{ 'active' if ep == 'classroom.overview' }}">Classrooms</a>
+      <a href="{{ url_for('classroom.register') }}" class="{{ 'active' if ep == 'classroom.register' }}">Class Register</a>
+      <a href="{{ url_for('classroom.movements') }}" class="{{ 'active' if ep == 'classroom.movements' }}">Entry / Exit Log</a>
+      <a href="{{ url_for('classroom.monthly') }}" class="{{ 'active' if ep == 'classroom.monthly' }}">Monthly Register</a>
+      <a href="{{ url_for('classroom.people') }}" class="{{ 'active' if ep and (ep.startswith('classroom.person') or ep in ('classroom.people', 'classroom.enroll')) }}">Students &amp; Teachers</a>
       <div class="sep">Setup</div>
       <a href="{{ url_for('main.employees') }}" class="{{ 'active' if ep and ep.startswith('main.employee') }}">Employees</a>
       <a href="{{ url_for('main.shifts') }}" class="{{ 'active' if ep == 'main.shifts' }}">Shifts</a>
@@ -52,6 +58,7 @@
     {% block content %}{% endblock %}
   </main>
 </div>
+{% block scripts %}{% endblock %}
 <script>
   // close the mobile menu when clicking outside it
   document.addEventListener('click', function (e) {

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Bulk face photos{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Bulk face photos</h1><div class="muted">Add face photos for many students and teachers at once — for example ID-card photos.</div></div>
+  <div class="actions"><a class="btn" href="{{ url_for('classroom.people') }}">← Students &amp; Teachers</a></div>
+</div>
+<div class="card" data-face-models="{{ url_for('static', filename='faceapi/model') }}">
+  <ol class="small">
+    <li>Name each photo after the person's admission / staff number, e.g. <code>S1023.jpg</code>. For extra photos of the same person add a suffix after an underscore: <code>S1023_2.jpg</code>.</li>
+    <li>The people must already exist (add them or import a CSV first).</li>
+    <li>Choose all the photos below. They are processed in this browser; keep the page open until it finishes.</li>
+  </ol>
+  <div class="actions"><label class="btn primary">Choose photos<input type="file" id="files" accept="image/*" multiple hidden></label>
+    <span id="status" class="small muted"></span></div>
+  <div class="log-list" id="log" style="margin-top:12px"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='faceapi/face-api.js') }}"></script>
+<script src="{{ url_for('static', filename='classroom/faces.js') }}"></script>
+<script>
+(function () {
+  var url = {{ url_for('classroom.face_add_by_number')|tojson }};
+  var csrf = {{ csrf_token()|tojson }};
+  var statusEl = document.getElementById('status'), log = document.getElementById('log');
+  function line(text, cls) { var d = document.createElement('div'); d.className = cls; d.textContent = text; log.prepend(d); }
+  document.getElementById('files').addEventListener('change', async function (e) {
+    var files = Array.from(e.target.files), ok = 0, bad = 0;
+    statusEl.textContent = 'Loading face models…';
+    try { await FaceKit.load('ssd'); } catch (err) { statusEl.textContent = 'Could not load face models: ' + err.message; return; }
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i];
+      var number = f.name.replace(/\.[^.]+$/, '').replace(/_\d+$/, '').trim();
+      statusEl.textContent = 'Processing ' + (i + 1) + ' of ' + files.length + '…';
+      try {
+        var canvas = await FaceKit.imageFromFile(f);
+        var face = await FaceKit.describeOne(canvas);
+        var r = await FaceKit.post(url, { csrf_token: csrf, person_no: number,
+          descriptor: JSON.stringify(Array.from(face.descriptor)), thumbnail: FaceKit.thumbnail(canvas, face.detection.box) });
+        ok++; line('✓ ' + f.name + ' → ' + r.name, 'ok');
+      } catch (err) { bad++; line('✗ ' + f.name + ': ' + err.message, 'bad'); }
+    }
+    statusEl.textContent = 'Done: ' + ok + ' added, ' + bad + ' failed.';
+    e.target.value = '';
+  });
+})();
+</script>
+{% endblock %}

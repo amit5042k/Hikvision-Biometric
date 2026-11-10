@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Class register{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Class register · {{ room.name }}</h1>
+    <div class="muted">{{ day.strftime('%A, %d %B %Y') }}{% if kind == 'H' %} · Holiday{% elif kind == 'WO' %} · Weekly off{% endif %}</div></div>
+  <div class="actions no-print">
+    <a class="btn" href="{{ url_for('classroom.register', classroom=room.id, date=prev, role=role) }}">← Prev</a>
+    <a class="btn" href="{{ url_for('classroom.register', classroom=room.id, date=next, role=role) }}">Next →</a>
+    <a class="btn" href="{{ url_for('classroom.register', classroom=room.id, date=day, role=role, export='xlsx') }}">Excel</a>
+    <a class="btn" href="{{ url_for('classroom.register', classroom=room.id, date=day, role=role, export='csv') }}">CSV</a>
+    <button class="btn" onclick="window.print()">Print</button>
+  </div>
+</div>
+<div class="card no-print">
+  <form class="filters" method="get">
+    <label>Classroom<select name="classroom">{% for r in rooms %}<option value="{{ r.id }}" {{ 'selected' if r.id == room.id }}>{{ r.name }}</option>{% endfor %}</select></label>
+    <label>Date<input type="date" name="date" value="{{ day }}"></label>
+    <label>Show<select name="role"><option value="">Everyone</option>{% for k, v in roles.items() %}<option value="{{ k }}" {{ 'selected' if k == role }}>{{ v }}s</option>{% endfor %}</select></label>
+    <button class="btn" type="submit">Show</button>
+  </form>
+</div>
+<div class="stats">
+  <div class="stat ok"><div class="num">{{ summary.P }}</div><div class="lbl">Present</div></div>
+  <div class="stat bad"><div class="num">{{ summary.A }}</div><div class="lbl">Absent</div></div>
+  <div class="stat info"><div class="num">{{ summary.in }}</div><div class="lbl">In class now</div></div>
+</div>
+<div class="card">
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>No.</th><th>Name</th><th>Role</th><th>Class</th><th>Status</th><th>First entry</th><th>Last exit</th><th class="num">Time in class</th><th class="num">Entries</th>
+      {% for p in periods %}<th title="{{ p.start_time }}–{{ p.end_time }}">{{ p.name }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r.person.person_no }}</td>
+        <td><a href="{{ url_for('classroom.person_detail', person_id=r.person.id, date=day) }}">{{ r.person.name }}</a></td>
+        <td>{{ roles[r.person.role] }}</td><td>{{ r.person.class_name or '' }}</td>
+        <td>{% if r.status != '-' %}<span class="badge s-{{ r.status }}">{{ r.status }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td>{{ r.first_in.strftime('%H:%M') if r.first_in else '' }}</td>
+        <td>{% if r.in_class %}<span class="badge s-L">in class</span>{% elif r.last_out %}{{ r.last_out.strftime('%H:%M') }}{% endif %}</td>
+        <td class="num">{{ r.minutes|hm if r.sessions else '' }}</td>
+        <td class="num">{{ r.sessions|length or '' }}</td>
+        {% for m in r.periods %}<td>{% if m %}<span class="badge s-{{ m }}">{{ m }}</span>{% endif %}</td>{% endfor %}
+      </tr>
+    {% else %}
+      <tr><td colspan="{{ 9 + periods|length }}" class="muted">Nobody is assigned to this classroom and nobody was seen here. Set a home classroom for students under Students &amp; Teachers.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted small">Entry = first time seen by the panel camera. Exit = last time seen, once the person has been out of view for {{ room.absence_minutes }} minutes. "Entries" counts how many times they came in. P Present · A Absent · H Holiday · WO Weekly off.</p>
+</div>
+{% endblock %}

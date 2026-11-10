@@ -91,3 +91,29 @@ def monthly_workbook(rows, days, title, company):
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+def table_workbook(title, header, rows, company, fills=None):
+    """A single formatted sheet. ``fills=(first, end)`` colours status marks in those columns (0-based)."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Register"
+    ws.cell(row=1, column=1, value=f"{company} - {title}").font = Font(bold=True, size=14)
+    _header(ws, 3, header)
+    for r, values in enumerate(rows, start=4):
+        for col, value in enumerate(values, start=1):
+            c = ws.cell(row=r, column=col, value=_text(value))
+            c.border = BOX
+            if fills and fills[0] <= col - 1 < fills[1]:
+                c.alignment = Alignment(horizontal="center")
+                if value in FILLS:
+                    c.fill = PatternFill("solid", fgColor=FILLS[value])
+    for col, name in enumerate(header, start=1):
+        narrow = fills and fills[0] <= col - 1 < fills[1]
+        ws.column_dimensions[get_column_letter(col)].width = 5 if narrow else max(10, min(28, len(str(name)) + 4))
+    ws.column_dimensions["B"].width = 24
+    ws.row_dimensions[3].height = 30
+    ws.freeze_panes = "C4"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()

@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf, post_button %}
+{% block title %}{{ person.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ person.name }}</h1>
+    <div class="muted">#{{ person.person_no }} · {{ roles[person.role] }}{% if person.class_name %} · {{ person.class_name }}{% endif %}{% if person.room %} · {{ person.room }}{% endif %}{% if not person.active %} · <b>inactive</b>{% endif %}</div></div>
+  <div class="actions">
+    {% if user.role == 'admin' %}
+    <a class="btn" href="{{ url_for('classroom.person_form', person_id=person.id) }}">Edit</a>
+    {{ post_button(url_for('classroom.person_delete', person_id=person.id), 'Delete', 'btn danger', 'Delete ' ~ person.name ~ ' with all face photos and entry/exit records?') }}
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>Face photos ({{ faces|length }} / {{ max_faces }})</h2>
+  <p class="muted small">Add 2–5 photos: front-facing, good light, and ideally one taken by the classroom panel itself. Photos are turned into face data in this browser; only the face data and a small thumbnail are stored.</p>
+  <div class="faces">
+    {% for f in faces %}
+      <div class="face">{% if f.thumbnail %}<img src="{{ f.thumbnail }}" alt="face">{% else %}<div style="width:112px;height:112px;border-radius:8px;background:#eef0f4"></div>{% endif %}
+        {{ f.created_at[:10] }}
+        {% if user.role == 'admin' %}<div>{{ post_button(url_for('classroom.face_delete', face_id=f.id), 'Remove', 'btn sm danger', 'Remove this face photo?') }}</div>{% endif %}
+      </div>
+    {% else %}<div class="muted">No face photos yet — the panels cannot recognise {{ person.name }} until you add one.</div>{% endfor %}
+  </div>
+
+  {% if user.role == 'admin' %}
+  <div data-face-models="{{ url_for('static', filename='faceapi/model') }}" id="enrol" style="margin-top:18px">
+    <div class="actions">
+      <label class="btn">Upload photos<input type="file" id="files" accept="image/*" multiple hidden></label>
+      <button class="btn" type="button" id="cam-start">Use camera</button>
+      <span id="status" class="small muted"></span>
+    </div>
+    <div id="cam" hidden style="margin-top:12px">
+      <video id="video" class="enroll-video" autoplay muted playsinline></video>
+      <div class="actions" style="margin-top:8px">
+        <button class="btn primary" type="button" id="capture">Capture face</button>
+        <button class="btn" type="button" id="cam-stop">Close camera</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="page-head" style="margin-bottom:10px">
+    <h2 style="margin:0">Entries and exits on {{ day.strftime('%d %b %Y') }}</h2>
+    <form method="get" class="filters no-print"><input type="date" name="date" value="{{ day }}" onchange="this.form.submit()"></form>
+  </div>
+  <table>
+    <thead><tr><th>Time</th><th>Event</th><th>Classroom</th><th>Duration</th></tr></thead>
+    <tbody>
+    {% for e in events %}
+      <tr><td>{{ e.time.strftime('%H:%M') }}</td><td class="ev-{{ e.type }}">{{ e.type }}</td><td>{{ e.room.name }}</td>
+        <td class="small muted">{% if e.type == 'Exit' %}{{ e.session.minutes }} min in class{% elif e.session.open %}in class now{% endif %}</td></tr>
+    {% else %}<tr><td colspan="4" class="muted">Not seen on this day.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if user.role == 'admin' %}
+<script src="{{ url_for('static', filename='faceapi/face-api.js') }}"></script>
+<script src="{{ url_for('static', filename='classroom/faces.js') }}"></script>
+<script>
+(function () {
+  var addUrl = {{ url_for('classroom.face_add', person_id=person.id)|tojson }};
+  var csrf = {{ csrf_token()|tojson }};
+  var statusEl = document.getElementById('status');
+  var video = document.getElementById('video');
+  var stream = null, added = 0;
+  function say(msg, bad) { statusEl.textContent = msg; statusEl.style.color = bad ? 'var(--bad)' : ''; }
+  async function ready() { if (!FaceKit.ready) { say('Loading face models…'); await FaceKit.load('ssd'); } }
+  async function enrol(canvas, label) {
+    var face = await FaceKit.describeOne(canvas);
+    await FaceKit.post(addUrl, { csrf_token: csrf, descriptor: JSON.stringify(Array.from(face.descriptor)),
+                                 thumbnail: FaceKit.thumbnail(canvas, face.detection.box) });
+    added++;
+  }
+  document.getElementById('files').addEventListener('change', async function (e) {
+    var files = Array.from(e.target.files), errors = [];
+    try { await ready(); } catch (err) { return say('Could not load face models: ' + err.message, true); }
+    for (var i = 0; i < files.length; i++) {
+      say('Processing ' + (i + 1) + ' of ' + files.length + '…');
+      try { await enrol(await FaceKit.imageFromFile(files[i]), files[i].name); }
+      catch (err) { errors.push(files[i].name + ': ' + err.message); }
+    }
+    if (errors.length) { say(errors.join(' · '), true); if (added) setTimeout(function () { location.reload(); }, 4000); }
+    else location.reload();
+  });
+  document.getElementById('cam-start').addEventListener('click', async function () {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+      video.srcObject = stream;
+      document.getElementById('cam').hidden = false;
+      await ready(); say('Look at the camera and press Capture.');
+    } catch (err) { say(FaceKit.cameraError(err), true); }
+  });
+  document.getElementById('capture').addEventListener('click', async function () {
+    try { say('Capturing…'); await enrol(FaceKit.frame(video)); say('Captured ' + added + '. Capture another (turn the head slightly) or close the camera.'); }
+    catch (err) { say(err.message, true); }
+  });
+  document.getElementById('cam-stop').addEventListener('click', function () {
+    if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+    if (added) location.reload(); else document.getElementById('cam').hidden = true;
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Entry / exit log{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Entry / exit log</h1><div class="muted">{{ day.strftime('%A, %d %B %Y') }} · {{ events|length }} events</div></div>
+  <div class="actions no-print">
+    <a class="btn" href="{{ url_for('classroom.movements', date=prev, classroom=room_id or '', q=q) }}">← Prev</a>
+    <a class="btn" href="{{ url_for('classroom.movements', date=next, classroom=room_id or '', q=q) }}">Next →</a>
+    <a class="btn" href="{{ url_for('classroom.movements', date=day, classroom=room_id or '', q=q, export=1) }}">Export CSV</a>
+    <button class="btn" onclick="window.print()">Print</button>
+  </div>
+</div>
+<div class="card no-print">
+  <form class="filters" method="get">
+    <label>Date<input type="date" name="date" value="{{ day }}"></label>
+    <label>Classroom<select name="classroom"><option value="">All</option>{% for r in rooms %}<option value="{{ r.id }}" {{ 'selected' if r.id == room_id }}>{{ r.name }}</option>{% endfor %}</select></label>
+    <label>Person<input name="q" value="{{ q }}" placeholder="name or number"></label>
+    <button class="btn" type="submit">Show</button>
+  </form>
+</div>
+<div class="card">
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Time</th><th>Event</th><th>Classroom</th><th>No.</th><th>Name</th><th>Role</th><th>Class</th><th>Note</th></tr></thead>
+    <tbody>
+    {% for e in events %}
+      <tr><td>{{ e.time.strftime('%H:%M:%S') }}</td><td class="ev-{{ e.type }}">{{ e.type }}</td><td>{{ e.room.name }}</td>
+        <td>{{ e.person.person_no }}</td>
+        <td><a href="{{ url_for('classroom.person_detail', person_id=e.person.id, date=day) }}">{{ e.person.name }}</a></td>
+        <td>{{ e.person.role|capitalize }}</td><td>{{ e.person.class_name or '' }}</td>
+        <td class="small muted">{% if e.type == 'Exit' %}stayed {{ e.session.minutes }} min{% elif e.session.open %}in class now{% endif %}</td></tr>
+    {% else %}<tr><td colspan="8" class="muted">No entries or exits recorded.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}
