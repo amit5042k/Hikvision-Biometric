@@ -57,7 +57,16 @@
   async function fetchRoster() {
     try {
       var resp = await fetch(K.roster, { cache: 'no-store' });
+      if (resp.status === 404) {
+        state.signedOut = true;
+        state.syncError = window.AndroidKiosk
+          ? 'This panel is no longer signed in to its classroom (the link was changed or the room removed). Tap ⚙ App settings and sign in again.'
+          : 'This kiosk link is no longer valid. Copy the new link from the Classrooms page.';
+        message(state.syncError);
+        return;
+      }
       if (!resp.ok) throw new Error('server returned ' + resp.status);
+      if (state.signedOut) { state.signedOut = false; message(''); }
       var data = await resp.json();
       save('roster', data);
       applyRoster(data, true);

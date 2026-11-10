@@ -314,8 +314,12 @@ def school_days(db, start, end, today_=None):
     return out
 
 
-def analytics(db, start, end, class_name="", now=None):
-    """Numbers for the Analytics page, for school days between start and end."""
+def analytics(db, start, end, class_name="", classroom_id=None, now=None):
+    """Numbers for the Analytics page, for school days between start and end.
+
+    With ``classroom_id`` (a class login) everything is limited to that room:
+    its home students, the teachers seen in it, and the room itself.
+    """
     now = now or datetime.now()
     days = school_days(db, start, end, now.date())
     day_set = {d.isoformat() for d in days}
@@ -333,8 +337,14 @@ def analytics(db, start, end, class_name="", now=None):
         sql += " AND (class_name = ? OR role = 'teacher')"
         args.append(class_name)
     persons = db.execute(sql + " ORDER BY class_name, name", args).fetchall()
-    students = [p for p in persons if p["role"] == "student"]
+    students = [p for p in persons if p["role"] == "student"
+                and (not classroom_id or p["classroom_id"] == classroom_id)]
     teachers = [p for p in persons if p["role"] == "teacher"]
+    if classroom_id:
+        seen_here = {r[0] for r in db.execute(
+            "SELECT DISTINCT person_id FROM class_sightings WHERE classroom_id = ? AND seen_at BETWEEN ? AND ?",
+            (classroom_id, f"{start} 00:00:00", f"{end} 23:59:59"))}
+        teachers = [p for p in teachers if p["id"] in seen_here or p["classroom_id"] == classroom_id]
 
     # first sighting of each person on each day (any classroom)
     first_seen = {}
@@ -374,7 +384,8 @@ def analytics(db, start, end, class_name="", now=None):
         c["percent"] = round(100 * c["present"] / possible, 1) if possible else None
 
     # teacher time in classrooms, from presence sessions
-    rooms = {r["id"]: r for r in db.execute("SELECT * FROM classrooms")}
+    rooms = {r["id"]: r for r in db.execute("SELECT * FROM classrooms")
+             if not classroom_id or r["id"] == classroom_id}
     teacher_ids = {p["id"] for p in teachers}
     groups = {}
     for r in db.execute("SELECT classroom_id, person_id, seen_at FROM class_sightings WHERE seen_at BETWEEN ? AND ? "
@@ -383,7 +394,7 @@ def analytics(db, start, end, class_name="", now=None):
             datetime.strptime(r["seen_at"], FMT))
     teacher_minutes, teacher_days, room_people = {}, {}, {}
     for (rid, pid, d), times in groups.items():
-        if d not in day_set:
+        if d not in day_set or rid not in rooms:
             continue
         room_people.setdefault(rid, {}).setdefault(d, set()).add(pid)
         if pid in teacher_ids and rid in rooms:

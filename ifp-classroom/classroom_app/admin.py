@@ -13,7 +13,8 @@ from .db import get_db
 
 bp = Blueprint("admin", __name__)
 
-ROLES = {"admin": "Admin", "viewer": "Viewer"}
+ROLES = {"admin": "Admin", "viewer": "Viewer"}          # roles that can be given on the Settings page
+ROLE_LABELS = dict(ROLES, **{"class": "Classroom"})     # class logins are managed on the Classrooms page
 LOCKOUT_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
 
@@ -146,6 +147,8 @@ def settings():
                     _audit("user.reset_password", target["username"])
                     db.commit()
                     flash(f"Password for {target['username']} reset.", "success")
+            elif form == "set_role" and target["role"] == "class":
+                flash("Classroom logins belong to their classroom; change them on the Classrooms page.", "error")
             elif target["role"] == "admin" and _admin_count(db, excluding=uid) == 0:
                 flash("At least one administrator must remain.", "error")
             elif form == "set_role":
@@ -165,9 +168,10 @@ def settings():
                 db.commit()
                 flash("User deleted.", "success")
         return redirect(url_for("admin.settings"))
-    return render_template("settings.html", settings=dbmod.get_settings(db), roles=ROLES,
-                           users=db.execute("SELECT id, username, role, created_at FROM users "
-                                            "ORDER BY role, username").fetchall())
+    return render_template("settings.html", settings=dbmod.get_settings(db), roles=ROLES, role_labels=ROLE_LABELS,
+                           users=db.execute("SELECT u.id, u.username, u.role, u.created_at, c.name AS room "
+                                            "FROM users u LEFT JOIN classrooms c ON c.id = u.classroom_id "
+                                            "ORDER BY u.role, c.name, u.username").fetchall())
 
 
 @bp.route("/settings/backup")

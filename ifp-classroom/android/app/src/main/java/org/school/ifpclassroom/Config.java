@@ -17,13 +17,35 @@ final class Config {
     }
 
     String kioskLink() { return prefs.getString("kiosk_link", ""); }
+    String server() { return prefs.getString("server", ""); }
+    String username() { return prefs.getString("username", ""); }
+    String classroomName() { return prefs.getString("classroom_name", ""); }
     boolean autoStart() { return prefs.getBoolean("auto_start", true); }
     boolean background() { return prefs.getBoolean("background", true); }
     String pin() { return prefs.getString("pin", ""); }
 
-    void save(String link, boolean autoStart, boolean background, String pin) {
-        prefs.edit().putString("kiosk_link", link.trim()).putBoolean("auto_start", autoStart)
-                .putBoolean("background", background).putString("pin", pin.trim()).apply();
+    /** Saves the result of signing in. The password itself is never stored. */
+    void save(String server, String username, String classroomName, String link, boolean autoStart,
+              boolean background, String pin) {
+        prefs.edit().putString("server", server.trim()).putString("username", username.trim())
+                .putString("classroom_name", classroomName).putString("kiosk_link", link.trim())
+                .putBoolean("auto_start", autoStart).putBoolean("background", background)
+                .putString("pin", pin.trim()).apply();
+    }
+
+    /** "192.168.1.10" -> "http://192.168.1.10:8000"; keeps an explicit scheme, port and path. */
+    static String normaliseServer(String input) {
+        String s = input == null ? "" : input.trim();
+        while (s.endsWith("/")) s = s.substring(0, s.length() - 1);
+        if (s.isEmpty()) return "";
+        boolean hasScheme = s.startsWith("http://") || s.startsWith("https://");
+        if (!hasScheme) s = "http://" + s;
+        Uri uri = Uri.parse(s);
+        if (uri.getHost() == null || uri.getHost().isEmpty()) return "";
+        if (!hasScheme && uri.getPort() == -1) {
+            s = "http://" + uri.getHost() + ":8000" + (uri.getEncodedPath() == null ? "" : uri.getEncodedPath());
+        }
+        return s;
     }
 
     boolean isConfigured() { return parse(kioskLink()) != null; }

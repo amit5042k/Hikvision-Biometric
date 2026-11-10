@@ -47,10 +47,15 @@ def create_app(test_config=None):
     def load_user_and_check_csrf():
         g.user = None
         if "user_id" in session:
-            g.user = dbmod.get_db().execute("SELECT id, username, role FROM users WHERE id = ?",
+            g.user = dbmod.get_db().execute("SELECT id, username, role, classroom_id FROM users WHERE id = ?",
                                             (session["user_id"],)).fetchone()
             if g.user is None:
                 session.pop("user_id", None)
+        # A classroom login sees only its own room's pages.
+        if g.user is not None and g.user["role"] == "class" and request.endpoint not in CLASS_ENDPOINTS:
+            if request.method == "POST":
+                abort(403)
+            return redirect(url_for("classroom.register"))
         # /api/ endpoints are called by the classroom panels and use the kiosk link secret instead
         if request.method == "POST" and not request.path.startswith("/api/"):
             expected = session.get("csrf_token")
@@ -63,6 +68,15 @@ def create_app(test_config=None):
 
     register_cli(app)
     return app
+
+
+# Pages a classroom login may use; each one limits itself to that login's room.
+CLASS_ENDPOINTS = {
+    "static", "admin.login", "admin.logout", "admin.settings",
+    "classroom.register", "classroom.movements", "classroom.monthly", "classroom.analytics",
+    "classroom.person_detail", "classroom.panel_app",
+    "classroom.kiosk", "classroom.kiosk_roster", "classroom.kiosk_sightings", "classroom.panel_login",
+}
 
 
 def register_cli(app):
@@ -113,7 +127,7 @@ def login_required(view):
     return wrapped
 
 
-staff_required = login_required  # every login (admin or viewer) may view reports
+staff_required = login_required  # every login may view reports (a class login only its own room)
 
 
 def admin_required(view):

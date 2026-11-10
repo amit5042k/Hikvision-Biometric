@@ -61,13 +61,27 @@ def _audit(action, details=""):
     dbmod.audit(get_db(), g.user["username"] if g.get("user") else None, action, details)
 
 
+def _my_room():
+    """The classroom a class login is limited to, or None for admin / viewer."""
+    user = g.get("user")
+    return user["classroom_id"] if user is not None and user["role"] == "class" else None
+
+
 def _rooms():
+    mine = _my_room()
+    if mine:
+        return get_db().execute("SELECT * FROM classrooms WHERE id = ?", (mine,)).fetchall()
     return get_db().execute("SELECT * FROM classrooms ORDER BY name").fetchall()
 
 
 def _class_names():
-    return [r[0] for r in get_db().execute("SELECT DISTINCT class_name FROM class_persons "
-                                           "WHERE COALESCE(class_name, '') != '' ORDER BY class_name")]
+    mine = _my_room()
+    sql = "SELECT DISTINCT class_name FROM class_persons WHERE COALESCE(class_name, '') != ''"
+    args = []
+    if mine:
+        sql += " AND classroom_id = ?"
+        args.append(mine)
+    return [r[0] for r in get_db().execute(sql + " ORDER BY class_name", args)]
 
 
 def _room_or_404(room_id):
@@ -98,10 +112,12 @@ def overview():
                       "in_class": sum(1 for r in rows if r.in_class),
                       "present": sum(1 for r in home if r.status == "P"), "expected": len(home),
                       "kiosk_url": url_for("classroom.kiosk", token=room["kiosk_token"], _external=True)})
+    logins = {r["classroom_id"]: r["username"] for r in
+              db.execute("SELECT classroom_id, username FROM users WHERE role = 'class'")}
     counts = db.execute("SELECT role, COUNT(*) AS n, SUM(EXISTS(SELECT 1 FROM face_samples f "
                         "WHERE f.person_id = p.id)) AS enrolled FROM class_persons p WHERE active = 1 "
                         "GROUP BY role").fetchall()
-    return render_template("classroom/overview.html", rooms=rooms, periods=cl.periods(db),
+    return render_template("classroom/overview.html", rooms=rooms, periods=cl.periods(db), logins=logins,
                            counts={r["role"]: r for r in counts}, settings=dbmod.get_settings(db))
 
 
@@ -128,6 +144,43 @@ def room_save():
         flash(f"Classroom {name} saved.", "success")
     except sqlite3.IntegrityError:
         flash("A classroom with that name already exists.", "error")
+    return redirect(url_for("classroom.overview"))
+
+
+@bp.route("/classroom/rooms/<int:room_id>/login", methods=["POST"])
+@admin_required
+def room_login(room_id):
+    """Create or change the classroom's own login (used by its panel app and class teacher)."""
+    from werkzeug.security import generate_password_hash
+    db = get_db()
+    room = _room_or_404(room_id)
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "")
+    existing = db.execute("SELECT * FROM users WHERE role = 'class' AND classroom_id = ?", (room_id,)).fetchone()
+    taken = db.execute("SELECT 1 FROM users WHERE username = ? AND id != ?",
+                       (username, existing["id"] if existing else 0)).fetchone()
+    if not username or len(username) > 40 or " " in username:
+        flash("Enter a username without spaces (max 40 characters), e.g. class8a.", "error")
+    elif taken:
+        flash("That username is already used by another login.", "error")
+    elif not existing and len(password) < 6:
+        flash("Enter a password of at least 6 characters.", "error")
+    elif password and len(password) < 6:
+        flash("The password must be at least 6 characters.", "error")
+    else:
+        if existing:
+            db.execute("UPDATE users SET username = ? WHERE id = ?", (username, existing["id"]))
+            if password:
+                db.execute("UPDATE users SET password_hash = ? WHERE id = ?",
+                           (generate_password_hash(password), existing["id"]))
+            _audit("classroom.login_update", f"{room['name']}: {username}" + (" (new password)" if password else ""))
+        else:
+            db.execute("INSERT INTO users (username, password_hash, role, classroom_id) VALUES (?, ?, 'class', ?)",
+                       (username, generate_password_hash(password), room_id))
+            _audit("classroom.login_create", f"{room['name']}: {username}")
+        db.commit()
+        flash(f"Login for {room['name']} saved: {username}. Use it in that room's panel app and to view the "
+              "class's reports.", "success")
     return redirect(url_for("classroom.overview"))
 
 
@@ -277,10 +330,14 @@ def person_detail(person_id):
                         "ON c.id = p.classroom_id WHERE p.id = ?", (person_id,)).fetchone()
     if person is None:
         abort(404)
+    mine = _my_room()
+    if mine and person["classroom_id"] != mine and not db.execute(
+            "SELECT 1 FROM class_sightings WHERE person_id = ? AND classroom_id = ? LIMIT 1", (person_id, mine)).fetchone():
+        abort(404)  # a class login sees only its own students and people seen in its room
     faces = db.execute("SELECT id, thumbnail, created_at FROM face_samples WHERE person_id = ? ORDER BY id",
                        (person_id,)).fetchall()
     day = parse_date(request.args.get("date"), date.today())
-    events = cl.movements(db, day, person_id=person_id)
+    events = cl.movements(db, day, classroom_id=mine, person_id=person_id)
     return render_template("classroom/person_detail.html", person=person, faces=faces, events=events, day=day,
                            max_faces=MAX_FACES_PER_PERSON, roles=ROLES)
 
@@ -433,7 +490,7 @@ def people_export():
 def register():
     db = get_db()
     rooms = _rooms()
-    room_id = _int(request.args.get("classroom")) or (rooms[0]["id"] if rooms else None)
+    room_id = _my_room() or _int(request.args.get("classroom")) or (rooms[0]["id"] if rooms else None)
     day = parse_date(request.args.get("date"), date.today())
     role = request.args.get("role", "") if request.args.get("role", "") in ROLES else ""
     if not room_id:
@@ -466,7 +523,7 @@ def register():
 def movements():
     db = get_db()
     day = parse_date(request.args.get("date"), date.today())
-    room_id = _int(request.args.get("classroom"))
+    room_id = _my_room() or _int(request.args.get("classroom"))
     events = cl.movements(db, day, classroom_id=room_id)
     q = request.args.get("q", "").strip().lower()
     if q:
@@ -490,7 +547,7 @@ def monthly():
     except ValueError:
         start = date.today().replace(day=1)
     end = start.replace(day=monthrange(start.year, start.month)[1])
-    room_id = _int(request.args.get("classroom"))
+    room_id = _my_room() or _int(request.args.get("classroom"))
     class_name = request.args.get("class_name", "")
     role = request.args.get("role", "student")
     role = role if role in ROLES else ""
@@ -535,7 +592,7 @@ def analytics():
     if (end - start).days > 400:
         start = end - timedelta(days=400)
     class_name = request.args.get("class_name", "")
-    data = cl.analytics(db, start, end, class_name=class_name)
+    data = cl.analytics(db, start, end, class_name=class_name, classroom_id=_my_room())
     export = request.args.get("export")
     if export == "students":
         rows = sorted(data["students"], key=lambda r: (r["percent"] is None, r["percent"] or 0))
@@ -565,6 +622,41 @@ def panel_app():
     apk = os.path.join(current_app.static_folder, "app", "ifp-classroom.apk")
     size = os.path.getsize(apk) // (1024 * 1024) if os.path.exists(apk) else None
     return render_template("classroom/panel_app.html", size=size)
+
+
+# ------------------------------------------------------ panel sign-in ----
+@bp.route("/api/panel/login", methods=["POST"])
+def panel_login():
+    """The panel app signs in with its classroom's login and receives that room's kiosk link.
+
+    Only the room's kiosk code is stored on the panel, never the password.
+    """
+    from werkzeug.security import check_password_hash
+    db = get_db()
+    data = request.get_json(silent=True) or {}
+    username = str(data.get("username", "")).strip()[:60]
+    password = str(data.get("password", ""))
+    since = "-15 minutes"
+    failures = db.execute("SELECT COUNT(*) FROM login_attempts WHERE (username = ? OR ip = ?) "
+                          "AND created_at >= datetime('now', ?)", (username, request.remote_addr, since)).fetchone()[0]
+    if failures >= 10:
+        return jsonify({"ok": False, "error": "Too many failed sign-ins. Wait 15 minutes and try again."}), 429
+    user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+    if not user or not check_password_hash(user["password_hash"], password):
+        db.execute("INSERT INTO login_attempts (username, ip) VALUES (?, ?)", (username, request.remote_addr))
+        db.commit()
+        return jsonify({"ok": False, "error": "Wrong username or password."}), 401
+    if user["role"] != "class" or not user["classroom_id"]:
+        return jsonify({"ok": False, "error": "Use the classroom's own login on a panel (not an admin or viewer "
+                                              "login). The admin creates it on the Classrooms page."}), 403
+    room = db.execute("SELECT * FROM classrooms WHERE id = ?", (user["classroom_id"],)).fetchone()
+    if room is None or not room["enabled"]:
+        return jsonify({"ok": False, "error": "This classroom is disabled on the server."}), 403
+    db.execute("DELETE FROM login_attempts WHERE username = ?", (username,))
+    dbmod.audit(db, username, "panel.login", f"{room['name']} from {request.remote_addr}")
+    db.commit()
+    return jsonify({"ok": True, "classroom": {"id": room["id"], "name": room["name"]},
+                    "kiosk_path": url_for("classroom.kiosk", token=room["kiosk_token"])})
 
 
 # --------------------------------------------------------------- kiosk ----

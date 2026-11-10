@@ -7,7 +7,9 @@ room. It has its own database, logins and settings, and does not connect to any
 other attendance software.
 
 **Your Windows PC is the server**: it stores all data and runs all analysis.
-**Each Android panel runs the IFP Classroom app as a client.**
+**Every classroom's Android panel runs the IFP Classroom app as a client**, and
+**each classroom has its own login** on the same server. The panel signs in
+with it, and the class teacher uses it to see only that class's reports.
 
 - **Android client app** (`android/`, ready-made APK served by the server at
   `/app`).
@@ -27,8 +29,11 @@ other attendance software.
 - **Enrolment:** add students and teachers one by one or from a CSV. Add face
   photos by upload, from a camera, or in bulk with files named by admission
   number.
-- **Logins:** admin and viewer (read-only) logins, sign-in lockout and an audit
-  log.
+- **Logins:**
+  - Admin.
+  - Viewer: all classes, read-only.
+  - One classroom login per room: its panel, plus its class teacher's reports.
+  - Sign-in lockout and an audit log.
 
 ## Install
 
@@ -40,11 +45,12 @@ Full steps: **[docs/SETUP.md](docs/SETUP.md)**.
    3. Run `windows\install_windows_server.bat` as administrator.
    4. Open `http://<PC-IP>:8000` and sign in as **admin / admin**. Change the
       password.
-2. **Set up:** add classrooms, students and teachers, and face photos.
+2. **Set up:** add classrooms and give each its own login (Classrooms → Edit →
+   Create login). Add students, teachers and face photos.
 3. **Each panel:**
    1. Open `http://<PC-IP>:8000/app` in the panel's browser and install the app.
-   2. Paste that room's kiosk link.
-   3. Tap **Save and start**.
+   2. Sign in with the server address and that classroom's login.
+   3. Tap **Sign in and start**.
 
 Running on Linux or macOS instead:
 

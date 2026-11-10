@@ -12,6 +12,14 @@
     <div class="brand">{{ school_name }}<small>Classroom Attendance · IFP camera</small></div>
     {% set ep = request.endpoint %}
     <nav class="nav">
+      {% if user and user.role == 'class' %}
+      <div class="sep">My classroom</div>
+      <a href="{{ url_for('classroom.register') }}" class="{{ 'active' if ep == 'classroom.register' }}">Class Register</a>
+      <a href="{{ url_for('classroom.movements') }}" class="{{ 'active' if ep == 'classroom.movements' }}">Entry / Exit Log</a>
+      <a href="{{ url_for('classroom.monthly') }}" class="{{ 'active' if ep == 'classroom.monthly' }}">Monthly Register</a>
+      <a href="{{ url_for('classroom.analytics') }}" class="{{ 'active' if ep == 'classroom.analytics' }}">Analytics</a>
+      <a href="{{ url_for('admin.settings') }}" class="{{ 'active' if ep == 'admin.settings' }}">Change Password</a>
+      {% else %}
       <a href="{{ url_for('classroom.overview') }}" class="{{ 'active' if ep == 'classroom.overview' }}">Classrooms</a>
       <a href="{{ url_for('classroom.analytics') }}" class="{{ 'active' if ep == 'classroom.analytics' }}">Analytics</a>
       <div class="sep">Attendance</div>
@@ -23,10 +31,11 @@
       <a href="{{ url_for('admin.holidays') }}" class="{{ 'active' if ep == 'admin.holidays' }}">Holidays</a>
       <a href="{{ url_for('admin.settings') }}" class="{{ 'active' if ep == 'admin.settings' }}">Settings</a>
       {% if user and user.role == 'admin' %}<a href="{{ url_for('admin.audit_log') }}" class="{{ 'active' if ep == 'admin.audit_log' }}">Audit Log</a>{% endif %}
+      {% endif %}
     </nav>
     {% if user %}
     <div class="side-foot">
-      Signed in as <b>{{ user.username }}</b> ({{ user.role }})<br>
+      Signed in as <b>{{ user.username }}</b> ({{ 'classroom' if user.role == 'class' else user.role }})<br>
       <form method="post" action="{{ url_for('admin.logout') }}" class="inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit">Sign out</button>

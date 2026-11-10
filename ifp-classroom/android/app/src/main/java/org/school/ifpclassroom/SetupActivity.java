@@ -10,7 +10,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.InputType;
-import android.view.Gravity;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -22,17 +21,25 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
-/** One-time setup on each panel: which classroom this panel is, plus a few options. */
+/**
+ * Panel setup: sign in to the school server with this classroom's own login.
+ * The server answers with the classroom's kiosk link; the password is not stored.
+ */
 public class SetupActivity extends Activity {
     private Config config;
-    private EditText link;
+    private EditText server;
+    private EditText username;
+    private EditText password;
     private EditText pin;
     private Switch autoStart;
     private Switch background;
     private TextView result;
+    private Button signIn;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,19 +55,29 @@ public class SetupActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(pad, pad, pad, pad);
 
-        TextView title = text("IFP Classroom — panel setup", 24);
+        TextView title = text("IFP Classroom — sign in this panel", 24);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         box.addView(title);
-        box.addView(text("On the server PC, open Classrooms, copy this room's kiosk link and enter it below. "
-                + "It looks like http://192.168.1.10:8000/kiosk/AbC123…", 15));
+        if (config.isConfigured()) {
+            box.addView(text("Currently signed in as " + config.username()
+                    + (config.classroomName().isEmpty() ? "" : " (" + config.classroomName() + ")") + ".", 15));
+        }
+        box.addView(text("Use this classroom's own login. The administrator creates it on the server's "
+                + "Classrooms page (Edit → Create login).", 15));
 
-        box.addView(label("Kiosk link for this classroom"));
-        link = new EditText(this);
-        link.setSingleLine(true);
-        link.setInputType(InputType.TYPE_TEXT_VARIATION_URI);
-        link.setHint("http://192.168.1.10:8000/kiosk/…");
-        link.setText(config.kioskLink());
-        box.addView(link);
+        box.addView(label("Server address"));
+        server = field("e.g. 192.168.1.10:8000", InputType.TYPE_TEXT_VARIATION_URI);
+        server.setText(config.server());
+        box.addView(server);
+
+        box.addView(label("Classroom username"));
+        username = field("e.g. class8a", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        username.setText(config.username());
+        box.addView(username);
+
+        box.addView(label("Password"));
+        password = field("", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        box.addView(password);
 
         autoStart = new Switch(this);
         autoStart.setText("Open automatically when the panel is switched on");
@@ -75,22 +92,22 @@ public class SetupActivity extends Activity {
         box.addView(background);
 
         box.addView(label("Settings PIN (optional — stops students changing these settings)"));
-        pin = new EditText(this);
-        pin.setSingleLine(true);
-        pin.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        pin = field("", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
         pin.setText(config.pin());
         box.addView(pin);
 
         LinearLayout buttons = new LinearLayout(this);
         buttons.setPadding(0, dp(20), 0, 0);
-        Button test = new Button(this);
-        test.setText("Test connection");
-        test.setOnClickListener(v -> testConnection());
-        Button save = new Button(this);
-        save.setText("Save and start");
-        save.setOnClickListener(v -> saveAndStart());
-        buttons.addView(test);
-        buttons.addView(save);
+        signIn = new Button(this);
+        signIn.setText("Sign in and start");
+        signIn.setOnClickListener(v -> signIn());
+        buttons.addView(signIn);
+        if (config.isConfigured()) {
+            Button keep = new Button(this);
+            keep.setText("Save options only");
+            keep.setOnClickListener(v -> saveOptionsOnly());
+            buttons.addView(keep);
+        }
         box.addView(buttons);
 
         result = text("", 15);
@@ -131,67 +148,102 @@ public class SetupActivity extends Activity {
                 .setNegativeButton("Cancel", (d, w) -> finish()).show();
     }
 
-    private void testConnection() {
-        final String[] p = Config.parse(link.getText().toString());
-        if (p == null) {
-            result.setTextColor(Color.rgb(198, 40, 40));
-            result.setText("That is not a kiosk link. It must contain /kiosk/ followed by the room's code.");
+    private void signIn() {
+        final String base = Config.normaliseServer(server.getText().toString());
+        final String user = username.getText().toString().trim();
+        final String pass = password.getText().toString();
+        if (base.isEmpty() || user.isEmpty() || pass.isEmpty()) {
+            error("Enter the server address, the classroom username and its password.");
             return;
         }
+        signIn.setEnabled(false);
         result.setTextColor(Color.DKGRAY);
-        result.setText("Connecting…");
+        result.setText("Signing in to " + base + " …");
         new Thread(() -> {
-            String message;
-            boolean ok = false;
+            String message = null;
+            String link = null;
+            String room = "";
             try {
-                HttpURLConnection c = (HttpURLConnection) new URL(Config.rosterUrl(p)).openConnection();
+                HttpURLConnection c = (HttpURLConnection) new URL(base + "/api/panel/login").openConnection();
                 c.setConnectTimeout(8000);
                 c.setReadTimeout(15000);
+                c.setRequestMethod("POST");
+                c.setDoOutput(true);
+                c.setRequestProperty("Content-Type", "application/json");
+                JSONObject body = new JSONObject().put("username", user).put("password", pass);
+                try (OutputStream out = c.getOutputStream()) {
+                    out.write(body.toString().getBytes(StandardCharsets.UTF_8));
+                }
                 int code = c.getResponseCode();
-                if (code == 404) {
-                    message = "The server answered, but this kiosk link is not valid (wrong code, room deleted, "
-                            + "disabled, or a new link was made). Copy the link again from the Classrooms page.";
-                } else if (code != 200) {
-                    message = "The server answered with error " + code + ".";
+                InputStream in = code < 400 ? c.getInputStream() : c.getErrorStream();
+                JSONObject o;
+                try {
+                    o = new JSONObject(read(in));
+                } catch (Exception notJson) {
+                    o = new JSONObject();
+                }
+                if (code == 200 && o.optBoolean("ok")) {
+                    link = base + o.getString("kiosk_path");
+                    room = o.getJSONObject("classroom").getString("name");
+                } else if (code == 404) {
+                    message = "That address answered, but it is not the IFP Classroom server. Check the address "
+                            + "and port (usually 8000).";
                 } else {
-                    JSONObject o = new JSONObject(read(c.getInputStream()));
-                    message = "Connected ✓  Classroom: " + o.getJSONObject("classroom").getString("name")
-                            + " · " + o.getJSONArray("persons").length() + " people with face photos.";
-                    ok = true;
+                    message = o.optString("error", "The server answered with error " + code + ".");
                 }
             } catch (Exception e) {
-                message = "Cannot reach the server: " + e.getMessage() + "\nCheck that the server PC is on, "
-                        + "the address is right, the panel is on the same network, and port 8000 is open in "
-                        + "the Windows firewall (the server installer does this).";
+                message = "Cannot reach the server at " + base + " (" + e.getMessage() + ").\nCheck that the "
+                        + "server PC is on, the address is right, the panel is on the school network, and port "
+                        + "8000 is open in the Windows firewall (the server installer does this).";
             }
-            final String m = message;
-            final boolean success = ok;
+            final String err = message;
+            final String kiosk = link;
+            final String roomName = room;
             runOnUiThread(() -> {
-                result.setTextColor(success ? Color.rgb(31, 143, 78) : Color.rgb(198, 40, 40));
-                result.setText(m);
+                signIn.setEnabled(true);
+                if (err != null) {
+                    error(err);
+                    return;
+                }
+                config.save(base, user, roomName, kiosk, autoStart.isChecked(), background.isChecked(),
+                        pin.getText().toString());
+                startKiosk();
             });
         }).start();
     }
 
-    private void saveAndStart() {
-        if (Config.parse(link.getText().toString()) == null) {
-            result.setTextColor(Color.rgb(198, 40, 40));
-            result.setText("Enter this classroom's kiosk link first.");
-            return;
-        }
-        config.save(link.getText().toString(), autoStart.isChecked(), background.isChecked(),
-                pin.getText().toString());
+    private void saveOptionsOnly() {
+        config.save(config.server(), config.username(), config.classroomName(), config.kioskLink(),
+                autoStart.isChecked(), background.isChecked(), pin.getText().toString());
+        startKiosk();
+    }
+
+    private void startKiosk() {
         startActivity(new Intent(this, KioskActivity.class).putExtra("reload", true)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP));
         finish();
     }
 
+    private void error(String message) {
+        result.setTextColor(Color.rgb(198, 40, 40));
+        result.setText(message);
+    }
+
     private static String read(InputStream in) throws java.io.IOException {
+        if (in == null) return "";
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         byte[] buf = new byte[8192];
         int n;
         while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
         return out.toString("UTF-8");
+    }
+
+    private EditText field(String hint, int inputType) {
+        EditText e = new EditText(this);
+        e.setSingleLine(true);
+        e.setInputType(inputType);
+        e.setHint(hint);
+        return e;
     }
 
     private TextView text(String s, int sp) {
@@ -207,7 +259,6 @@ public class SetupActivity extends Activity {
         TextView t = text(s, 14);
         t.setTypeface(Typeface.DEFAULT_BOLD);
         t.setPadding(0, dp(18), 0, 0);
-        t.setGravity(Gravity.START);
         return t;
     }
 

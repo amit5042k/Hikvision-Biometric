@@ -21,11 +21,12 @@
   <h2>Classrooms and their panels</h2>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Classroom</th><th>Panel</th><th class="num">In class now</th><th class="num">Present today</th><th>Leaves after</th><th>Kiosk link (enter this in the panel app)</th><th></th></tr></thead>
+    <thead><tr><th>Classroom</th><th>Class login</th><th>Panel</th><th class="num">In class now</th><th class="num">Present today</th><th>Leaves after</th><th>Kiosk link (alternative to the login)</th><th></th></tr></thead>
     <tbody>
     {% for r in rooms %}
       <tr>
         <td><a href="{{ url_for('classroom.register', classroom=r.room.id) }}"><b>{{ r.room.name }}</b></a>{% if not r.room.enabled %} <span class="badge">disabled</span>{% endif %}</td>
+        <td>{% if logins.get(r.room.id) %}<code>{{ logins[r.room.id] }}</code>{% else %}<span class="badge s-A">not set</span>{% endif %}</td>
         <td><span class="dot {{ 'ok' if r.status == 'online' else 'error' if r.status == 'offline' }}"></span>{{ r.status }}
           {% if r.room.last_seen_at %}<div class="small muted">{{ r.room.last_seen_at }}</div>{% endif %}</td>
         <td class="num">{{ r.in_class }}</td>
@@ -47,6 +48,11 @@
               <select name="enabled"><option value="1">enabled</option><option value="0" {{ 'selected' if not r.room.enabled }}>disabled</option></select>
               <button class="btn sm" type="submit">Save</button>
             </form>
+            <form method="post" action="{{ url_for('classroom.room_login', room_id=r.room.id) }}" class="inline-form" style="margin-top:6px">{{ csrf() }}
+              <input name="username" value="{{ logins.get(r.room.id, '') }}" placeholder="login, e.g. class8a" required size="10">
+              <input type="password" name="password" minlength="6" placeholder="{{ 'new password (optional)' if logins.get(r.room.id) else 'password' }}" size="12" {{ '' if logins.get(r.room.id) else 'required' }}>
+              <button class="btn sm" type="submit">{{ 'Update login' if logins.get(r.room.id) else 'Create login' }}</button>
+            </form>
             <div style="margin-top:6px">
             {{ post_button(url_for('classroom.room_token', room_id=r.room.id), 'New link', 'btn sm', 'Create a new kiosk link? The panel must be updated to the new link.') }}
             {{ post_button(url_for('classroom.room_delete', room_id=r.room.id), 'Delete', 'btn sm danger', 'Delete this classroom and ALL its entry/exit records?') }}
@@ -56,7 +62,7 @@
         </td>
       </tr>
     {% else %}
-      <tr><td colspan="7" class="muted">No classrooms yet. Add one below, then open its kiosk link on that room's panel.</td></tr>
+      <tr><td colspan="8" class="muted">No classrooms yet. Add one below, then open its kiosk link on that room's panel.</td></tr>
     {% endfor %}
     </tbody>
   </table>
@@ -72,7 +78,7 @@
 
 <div class="card">
   <h2>Panel app (Android)</h2>
-  <p class="small">On each classroom panel, open <b>{{ url_for('classroom.panel_app', _external=True) }}</b> in the panel's browser, install the app, then paste that room's kiosk link (above) into it. The app works on plain <code>http://</code>: no Chrome settings are needed.</p>
+  <p class="small">Every classroom has its <b>own login</b> (set it with <i>Edit</i> above). On each classroom panel, open <b>{{ url_for('classroom.panel_app', _external=True) }}</b> in the panel's browser, install the app, then sign in with the server address <code>{{ request.host }}</code> and that classroom's login. The same login lets the class teacher see only that class's reports on this server.</p>
   <a class="btn" href="{{ url_for('classroom.panel_app') }}">Open the app download page</a>
 </div>
 
@@ -132,7 +138,7 @@
   <h2>How it works</h2>
   <ol class="small">
     <li>Add each classroom here. Add students and teachers under <a href="{{ url_for('classroom.people') }}">Students &amp; Teachers</a> (one by one or from a CSV), and give each one or more face photos.</li>
-    <li>On each Android panel, install the <b>IFP Classroom</b> app (see "Panel app" above), enter that room's kiosk link and allow the camera. The app starts when the panel is switched on. Full steps: <code>docs/SETUP.md</code>.</li>
+    <li>Give each classroom its own login (Edit → Create login). On each Android panel, install the <b>IFP Classroom</b> app (see "Panel app" above), sign in with that classroom's login and allow the camera. The app starts when the panel is switched on. Full steps: <code>docs/SETUP.md</code>.</li>
     <li>The panel recognises faces itself and sends "seen" records to this server. Someone's <b>entry</b> is the first time they are seen; their <b>exit</b> is recorded once they have not been seen for the minutes set for that room.</li>
     <li>View and download the class register, entry/exit log and monthly register from any PC in the school.</li>
   </ol>

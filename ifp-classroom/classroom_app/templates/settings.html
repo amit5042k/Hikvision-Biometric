@@ -32,7 +32,7 @@
 {% if user.role == 'admin' %}
 <div class="card">
   <h2>Users &amp; logins</h2>
-  <p class="muted small"><b>Admin</b>: everything · <b>Viewer</b>: read-only reports (e.g. class teachers, principal).</p>
+  <p class="muted small"><b>Admin</b>: everything · <b>Viewer</b>: read-only reports for all classes (e.g. principal) · <b>Classroom</b>: one per classroom, created on the <a href="{{ url_for('classroom.overview') }}">Classrooms</a> page; signs in that room's panel app and shows only that class's reports.</p>
   <div class="table-wrap">
   <table>
     <thead><tr><th>Username</th><th>Role</th><th>Change role</th><th>Reset password</th><th></th></tr></thead>
@@ -40,10 +40,10 @@
     {% for u in users %}
       <tr>
         <td><b>{{ u.username }}</b>{% if u.id == user.id %} <span class="muted small">(you)</span>{% endif %}</td>
-        <td><span class="badge">{{ roles[u.role] }}</span></td>
-        <td><form method="post" class="inline-form">{{ csrf() }}<input type="hidden" name="form" value="set_role"><input type="hidden" name="user_id" value="{{ u.id }}">
+        <td><span class="badge">{{ role_labels[u.role] }}</span>{% if u.room %} <span class="small">{{ u.room }}</span>{% endif %}</td>
+        <td>{% if u.role == 'class' %}<span class="muted small">on Classrooms page</span>{% else %}<form method="post" class="inline-form">{{ csrf() }}<input type="hidden" name="form" value="set_role"><input type="hidden" name="user_id" value="{{ u.id }}">
           <select name="role">{% for k, v in roles.items() %}<option value="{{ k }}" {{ 'selected' if k == u.role }}>{{ v }}</option>{% endfor %}</select>
-          <button class="btn sm" type="submit">Set</button></form></td>
+          <button class="btn sm" type="submit">Set</button></form>{% endif %}</td>
         <td><form method="post" class="inline-form">{{ csrf() }}<input type="hidden" name="form" value="reset_password"><input type="hidden" name="user_id" value="{{ u.id }}">
           <input type="password" name="new_password" minlength="6" placeholder="new password" required size="12">
           <button class="btn sm" type="submit">Reset</button></form></td>

@@ -17,8 +17,11 @@
       <ol class="small" style="margin-top:16px">
         <li>Tap <b>Download</b> on this panel, then open the downloaded file.</li>
         <li>If Android asks, allow <b>Install unknown apps</b> for the browser (or file manager), then tap <b>Install</b>.</li>
-        <li>Open <b>IFP Classroom</b>. Paste this room's <b>kiosk link</b> (from the Classrooms page on the server PC) and tap <b>Test connection</b>, then <b>Save and start</b>.</li>
-        <li>Allow the camera when asked. Done — the panel now marks attendance. Tap <b>⚙ App settings</b> on the screen to change the room later.</li>
+        <li>Open <b>IFP Classroom</b> and sign in:
+          <ul><li>Server address: <code>{{ request.host }}</code></li>
+              <li>Username and password: <b>this classroom's own login</b> (the administrator creates it on the Classrooms page).</li></ul>
+          Tap <b>Sign in and start</b>.</li>
+        <li>Allow the camera when asked. Done — the panel now marks attendance for this classroom. Tap <b>⚙ App settings</b> on the screen to sign in again or change options.</li>
       </ol>
       <p class="small muted">To update the app, download and install it again over the old one; settings are kept.</p>
     </div>

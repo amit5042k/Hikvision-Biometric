@@ -17,7 +17,12 @@ DEFAULT_SETTINGS = {
 # schema.sql is the version-1 baseline and must never change. To change the
 # database later, APPEND (version, sql) here; each runs once on start-up, so
 # updating the code never resets existing data.
-MIGRATIONS = []
+MIGRATIONS = [
+    (2, """
+        -- one login per classroom: used by that room's panel app and its class teacher
+        ALTER TABLE users ADD COLUMN classroom_id INTEGER REFERENCES classrooms(id) ON DELETE CASCADE
+    """),
+]
 SCHEMA_VERSION = MIGRATIONS[-1][0] if MIGRATIONS else 1
 
 
