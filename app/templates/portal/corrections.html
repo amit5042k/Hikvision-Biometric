@@ -1,27 +1,27 @@
 {% extends "base.html" %}
 {% from "_macros.html" import csrf, post_button %}
-{% block title %}Punch corrections{% endblock %}
+{% block title %}{{ _("Punch corrections") }}{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Punch corrections</h1><div class="muted">Forgot to punch in or out? Ask for the missing time to be added.</div></div></div>
+<div class="page-head"><div><h1>{{ _("Punch corrections") }}</h1><div class="muted">{{ _("Forgot to punch in or out? Ask for the missing time to be added.") }}</div></div></div>
 <div class="card">
   <form method="post" class="filters">
     {{ csrf() }}
-    <label>When were you actually in / out?<input type="datetime-local" name="punch_time" required></label>
-    <label style="flex:1;min-width:220px">Reason<input name="reason" maxlength="500" required placeholder="e.g. Forgot to punch out"></label>
-    <button class="btn primary" type="submit">Send for approval</button>
+    <label>{{ _("When were you actually in / out?") }}<input type="datetime-local" name="punch_time" required></label>
+    <label style="flex:1;min-width:220px">{{ _("Reason") }}<input name="reason" maxlength="500" required placeholder="{{ _("e.g. Forgot to punch out") }}"></label>
+    <button class="btn primary" type="submit">{{ _("Send for approval") }}</button>
   </form>
 </div>
 <div class="card">
-  <h2>My requests</h2>
+  <h2>{{ _("My requests") }}</h2>
   <div class="table-wrap"><table>
-    <thead><tr><th>Punch time</th><th>Reason</th><th>Status</th><th>Asked</th><th></th></tr></thead>
+    <thead><tr><th>{{ _("Punch time") }}</th><th>{{ _("Reason") }}</th><th>{{ _("Status") }}</th><th>{{ _("Asked") }}</th><th></th></tr></thead>
     <tbody>
     {% for r in rows %}
       <tr><td><b>{{ r.punch_time[:16] }}</b></td><td class="wrap small">{{ r.reason or '' }}</td>
-        <td><span class="badge s-{{ r.status }}">{{ r.status }}</span>{% if r.decision_note %}<div class="muted small">{{ r.decision_note }}</div>{% endif %}</td>
+        <td><span class="badge s-{{ r.status }}">{{ _(r.status) }}</span>{% if r.decision_note %}<div class="muted small">{{ r.decision_note }}</div>{% endif %}</td>
         <td class="small muted">{{ r.created_at[:16] }}</td>
         <td>{% if r.status == 'pending' %}{{ post_button(url_for('portal.my_correction_cancel', req_id=r.id), 'Withdraw', 'btn sm', 'Withdraw this request?') }}{% endif %}</td></tr>
-    {% else %}<tr><td colspan="5" class="muted">No requests yet.</td></tr>{% endfor %}
+    {% else %}<tr><td colspan="5" class="muted">{{ _("No requests yet.") }}</td></tr>{% endfor %}
     </tbody>
   </table></div>
 </div>

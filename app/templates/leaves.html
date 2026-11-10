@@ -1,82 +1,82 @@
 {% extends "base.html" %}
 {% from "_macros.html" import csrf, post_button %}
-{% block title %}Leaves{% endblock %}
+{% block title %}{{ _("Leaves") }}{% endblock %}
 {% block content %}
 <div class="page-head">
-  <div><h1>Leaves</h1><div class="muted">{{ year }}</div></div>
+  <div><h1>{{ _("Leaves") }}</h1><div class="muted">{{ year }}</div></div>
   <div class="actions">
     <a class="btn" href="{{ url_for('main.leaves', year=year - 1, status=status) }}">← {{ year - 1 }}</a>
     <a class="btn" href="{{ url_for('main.leaves', year=year + 1, status=status) }}">{{ year + 1 }} →</a>
-    {% if pending_requests %}<a class="btn primary" href="{{ url_for('main.requests_page') }}">{{ pending_requests }} request(s) waiting</a>{% endif %}
+    {% if pending_requests %}<a class="btn primary" href="{{ url_for('main.requests_page') }}">{{ pending_requests }} {{ _("request(s) waiting") }}</a>{% endif %}
   </div>
 </div>
 {% if user.role == 'admin' %}
 <div class="card">
-  <h2>Record leave</h2>
-  <p class="muted small">Leave recorded here is approved straight away. Employees with a self-service login can also apply themselves; their requests appear under <a href="{{ url_for('main.requests_page') }}">Requests</a>.</p>
+  <h2>{{ _("Record leave") }}</h2>
+  <p class="muted small">{{ _("Leave recorded here is approved straight away. Employees with a self-service login can also apply themselves; their requests appear under") }} <a href="{{ url_for('main.requests_page') }}">{{ _("Requests") }}</a>.</p>
   <form method="post" class="form-grid">
     {{ csrf() }}
-    <label>Employee<select name="employee_id" required><option value="">Select…</option>
+    <label>{{ _("Employee") }}<select name="employee_id" required><option value="">{{ _("Select…") }}</option>
       {% for e in employees %}<option value="{{ e.id }}">{{ e.name }} (#{{ e.employee_no }})</option>{% endfor %}</select></label>
-    <label>From<input type="date" name="start_date" value="{{ today }}" required></label>
-    <label>To<input type="date" name="end_date" value="{{ today }}" required></label>
-    <label>Type<select name="leave_type">{% for t in types %}<option>{{ t.name }}</option>{% endfor %}</select></label>
-    <label>Reason<input name="reason" maxlength="500"></label>
-    <label class="check"><input type="checkbox" name="half_day"> Half day</label>
-    <div class="full"><button class="btn primary" type="submit">Save leave</button></div>
+    <label>{{ _("From") }}<input type="date" name="start_date" value="{{ today }}" required></label>
+    <label>{{ _("To") }}<input type="date" name="end_date" value="{{ today }}" required></label>
+    <label>{{ _("Type") }}<select name="leave_type">{% for t in types %}<option>{{ t.name }}</option>{% endfor %}</select></label>
+    <label>{{ _("Reason") }}<input name="reason" maxlength="500"></label>
+    <label class="check"><input type="checkbox" name="half_day"> {{ _("Half day") }}</label>
+    <div class="full"><button class="btn primary" type="submit">{{ _("Save leave") }}</button></div>
   </form>
 </div>
 {% endif %}
 <div class="card">
   <div class="page-head" style="margin-bottom:8px">
-    <h2 style="margin:0">Leave records</h2>
+    <h2 style="margin:0">{{ _("Leave records") }}</h2>
     <form class="filters" method="get"><input type="hidden" name="year" value="{{ year }}">
       <select name="status" onchange="this.form.submit()">
         {% for v, l in [('', 'All statuses'), ('approved', 'Approved'), ('pending', 'Pending'), ('rejected', 'Rejected')] %}
-        <option value="{{ v }}" {{ 'selected' if v == status }}>{{ l }}</option>{% endfor %}
+        <option value="{{ v }}" {{ 'selected' if v == status }}>{{ _(l) }}</option>{% endfor %}
       </select></form>
   </div>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Employee</th><th>From</th><th>To</th><th>Type</th><th>Half day</th><th>Status</th><th>Reason</th><th></th></tr></thead>
+    <thead><tr><th>{{ _("Employee") }}</th><th>{{ _("From") }}</th><th>{{ _("To") }}</th><th>{{ _("Type") }}</th><th>{{ _("Half day") }}</th><th>{{ _("Status") }}</th><th>{{ _("Reason") }}</th><th></th></tr></thead>
     <tbody>
     {% for l in rows %}
       <tr><td>{{ l.name }} <span class="muted">#{{ l.employee_no }}</span></td><td>{{ l.start_date }}</td><td>{{ l.end_date }}</td>
         <td><span class="badge s-L">{{ l.leave_type }}</span></td><td>{{ 'Yes' if l.half_day else '' }}</td>
-        <td><span class="badge s-{{ l.status }}">{{ l.status }}</span>{% if l.decided_by and l.requested_by != l.decided_by %}<div class="muted small">by {{ l.decided_by }}</div>{% endif %}</td>
-        <td class="wrap small">{{ l.reason or '' }}{% if l.decision_note %}<div class="muted">Note: {{ l.decision_note }}</div>{% endif %}</td>
+        <td><span class="badge s-{{ l.status }}">{{ _(l.status) }}</span>{% if l.decided_by and l.requested_by != l.decided_by %}<div class="muted small">{{ _("by") }} {{ l.decided_by }}</div>{% endif %}</td>
+        <td class="wrap small">{{ l.reason or '' }}{% if l.decision_note %}<div class="muted">{{ _("Note:") }} {{ l.decision_note }}</div>{% endif %}</td>
         <td>{% if user.role == 'admin' %}{{ post_button(url_for('main.leave_delete', leave_id=l.id), 'Delete', 'btn sm danger', 'Delete this leave?') }}{% endif %}</td></tr>
-    {% else %}<tr><td colspan="8" class="muted">No leave in {{ year }}.</td></tr>{% endfor %}
+    {% else %}<tr><td colspan="8" class="muted">{{ _("No leave in") }} {{ year }}.</td></tr>{% endfor %}
     </tbody>
   </table>
   </div>
 </div>
 
 <div class="card">
-  <h2>Balances {{ year }}</h2>
-  <p class="muted small">Days used from each yearly quota. Holidays and weekly offs inside a leave are not counted. "Pending" = requests waiting for approval.</p>
+  <h2>{{ _("Balances") }} {{ year }}</h2>
+  <p class="muted small">{{ _("Days used from each yearly quota. Holidays and weekly offs inside a leave are not counted. \"Pending\" = requests waiting for approval.") }}</p>
   {% set limited = types | selectattr('yearly_quota') | list %}
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Employee</th>{% for t in limited %}<th class="num">{{ t.name }}<div class="small" style="text-transform:none">of {{ '%g'|format(t.yearly_quota) }}</div></th>{% endfor %}<th class="num">Other leave used</th></tr></thead>
+    <thead><tr><th>{{ _("Employee") }}</th>{% for t in limited %}<th class="num">{{ t.name }}<div class="small" style="text-transform:none">{{ _("of") }} {{ '%g'|format(t.yearly_quota) }}</div></th>{% endfor %}<th class="num">{{ _("Other leave used") }}</th></tr></thead>
     <tbody>
     {% for e in employees %}{% set b = balances[e.id] %}
       <tr><td>{{ e.name }} <span class="muted">#{{ e.employee_no }}</span></td>
         {% for t in limited %}{% set x = b[t.name] %}
-          <td class="num {{ 'bal-low' if x.left is not none and x.left <= 0 }}">{{ '%g'|format(x.left) }} left{% if x.used or x.pending %}<div class="muted small">used {{ '%g'|format(x.used) }}{% if x.pending %}, {{ '%g'|format(x.pending) }} pending{% endif %}</div>{% endif %}</td>
+          <td class="num {{ 'bal-low' if x.left is not none and x.left <= 0 }}">{{ '%g'|format(x.left) }} {{ _("left") }}{% if x.used or x.pending %}<div class="muted small">{{ _("used") }} {{ '%g'|format(x.used) }}{% if x.pending %}, {{ '%g'|format(x.pending) }} {{ _("pending") }}{% endif %}</div>{% endif %}</td>
         {% endfor %}
         {% set other = namespace(n=0) %}{% for name, x in b.items() if not x.quota %}{% set other.n = other.n + x.used %}{% endfor %}
         <td class="num">{{ '%g'|format(other.n) if other.n else '' }}</td></tr>
-    {% else %}<tr><td class="muted">No employees.</td></tr>{% endfor %}
+    {% else %}<tr><td class="muted">{{ _("No employees.") }}</td></tr>{% endfor %}
     </tbody>
   </table>
   </div>
 </div>
 
 <div class="card">
-  <h2>Leave types</h2>
+  <h2>{{ _("Leave types") }}</h2>
   <table>
-    <thead><tr><th>Type</th><th class="num">Yearly quota</th><th>Paid</th><th></th></tr></thead>
+    <thead><tr><th>{{ _("Type") }}</th><th class="num">{{ _("Yearly quota") }}</th><th>{{ _("Paid") }}</th><th></th></tr></thead>
     <tbody>
     {% for t in types %}
       <tr><td>{{ t.name }}</td><td class="num">{{ '%g'|format(t.yearly_quota) if t.yearly_quota else 'No limit' }}</td>
@@ -88,11 +88,11 @@
   {% if user.role == 'admin' %}
   <form method="post" action="{{ url_for('main.leave_type_save') }}" class="filters" style="margin-top:12px">
     {{ csrf() }}
-    <label>Type (new or existing)<input name="name" list="leave-type-names" required maxlength="40"></label>
+    <label>{{ _("Type (new or existing)") }}<input name="name" list="leave-type-names" required maxlength="40"></label>
     <datalist id="leave-type-names">{% for t in types %}<option value="{{ t.name }}">{% endfor %}</datalist>
-    <label>Yearly quota (0 = no limit)<input name="yearly_quota" type="number" min="0" max="366" step="0.5" value="0"></label>
-    <label class="check"><input type="checkbox" name="paid" checked> Paid</label>
-    <button class="btn" type="submit">Save type</button>
+    <label>{{ _("Yearly quota (0 = no limit)") }}<input name="yearly_quota" type="number" min="0" max="366" step="0.5" value="0"></label>
+    <label class="check"><input type="checkbox" name="paid" checked> {{ _("Paid") }}</label>
+    <button class="btn" type="submit">{{ _("Save type") }}</button>
   </form>
   {% endif %}
 </div>

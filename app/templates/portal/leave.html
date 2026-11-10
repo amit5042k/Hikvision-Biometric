@@ -1,39 +1,39 @@
 {% extends "base.html" %}
 {% from "_macros.html" import csrf, post_button %}
-{% block title %}My leave{% endblock %}
+{% block title %}{{ _("My leave") }}{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>My leave</h1><div class="muted">{{ emp.name }} · {{ year }}</div></div></div>
+<div class="page-head"><div><h1>{{ _("My leave") }}</h1><div class="muted">{{ emp.name }} · {{ year }}</div></div></div>
 <div class="grid grid-2">
   <div class="card">
-    <h2>Apply for leave</h2>
+    <h2>{{ _("Apply for leave") }}</h2>
     <form method="post" class="form-grid">
       {{ csrf() }}
-      <label>Type<select name="leave_type" required>{% for t in types %}<option>{{ t.name }}</option>{% endfor %}</select></label>
-      <label class="check" style="align-self:end"><input type="checkbox" name="half_day"> Half day</label>
-      <label>From<input type="date" name="start_date" value="{{ today }}" required></label>
-      <label>To<input type="date" name="end_date" value="{{ today }}" required></label>
-      <label class="full">Reason<input name="reason" maxlength="500" placeholder="Optional"></label>
-      <div class="full"><button class="btn primary" type="submit">Send for approval</button></div>
+      <label>{{ _("Type") }}<select name="leave_type" required>{% for t in types %}<option>{{ t.name }}</option>{% endfor %}</select></label>
+      <label class="check" style="align-self:end"><input type="checkbox" name="half_day"> {{ _("Half day") }}</label>
+      <label>{{ _("From") }}<input type="date" name="start_date" value="{{ today }}" required></label>
+      <label>{{ _("To") }}<input type="date" name="end_date" value="{{ today }}" required></label>
+      <label class="full">{{ _("Reason") }}<input name="reason" maxlength="500" placeholder="{{ _("Optional") }}"></label>
+      <div class="full"><button class="btn primary" type="submit">{{ _("Send for approval") }}</button></div>
     </form>
-    <p class="muted small" style="margin-top:10px">Holidays and weekly offs inside your dates are not deducted from your balance.</p>
+    <p class="muted small" style="margin-top:10px">{{ _("Holidays and weekly offs inside your dates are not deducted from your balance.") }}</p>
   </div>
   <div class="card">
-    <h2>Balance {{ year }}</h2>
+    <h2>{{ _("Balance") }} {{ year }}</h2>
     {% include "_balance.html" %}
   </div>
 </div>
 <div class="card">
-  <h2>My requests</h2>
+  <h2>{{ _("My requests") }}</h2>
   <div class="table-wrap"><table>
-    <thead><tr><th>Dates</th><th>Type</th><th>Status</th><th>Reason</th><th></th></tr></thead>
+    <thead><tr><th>{{ _("Dates") }}</th><th>{{ _("Type") }}</th><th>{{ _("Status") }}</th><th>{{ _("Reason") }}</th><th></th></tr></thead>
     <tbody>
     {% for l in rows %}
-      <tr><td>{{ l.start_date }}{% if l.end_date != l.start_date %} → {{ l.end_date }}{% endif %}{% if l.half_day %} (half){% endif %}</td>
+      <tr><td>{{ l.start_date }}{% if l.end_date != l.start_date %} → {{ l.end_date }}{% endif %}{% if l.half_day %} {{ _("(half)") }}{% endif %}</td>
         <td>{{ l.leave_type }}</td>
-        <td><span class="badge s-{{ l.status }}">{{ l.status }}</span>{% if l.decision_note %}<div class="muted small">{{ l.decision_note }}</div>{% endif %}</td>
+        <td><span class="badge s-{{ l.status }}">{{ _(l.status) }}</span>{% if l.decision_note %}<div class="muted small">{{ l.decision_note }}</div>{% endif %}</td>
         <td class="wrap small">{{ l.reason or '' }}</td>
         <td>{% if l.status == 'pending' %}{{ post_button(url_for('portal.my_leave_cancel', leave_id=l.id), 'Withdraw', 'btn sm', 'Withdraw this request?') }}{% endif %}</td></tr>
-    {% else %}<tr><td colspan="5" class="muted">No leave yet.</td></tr>{% endfor %}
+    {% else %}<tr><td colspan="5" class="muted">{{ _("No leave yet.") }}</td></tr>{% endfor %}
     </tbody>
   </table></div>
 </div>

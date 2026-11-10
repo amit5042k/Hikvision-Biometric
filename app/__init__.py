@@ -38,8 +38,9 @@ def create_app(test_config=None):
     dbmod.init_db(app.config["DATABASE"], app.config["BACKUP_DIR"])
     app.teardown_appcontext(dbmod.close_db)
 
-    from . import bridge_api, portal, routes, twofactor
+    from . import bridge_api, i18n, portal, routes, twofactor
     app.register_blueprint(routes.bp)
+    app.register_blueprint(i18n.bp)
     app.register_blueprint(twofactor.bp)
     app.register_blueprint(bridge_api.bp)
     app.register_blueprint(portal.bp)
@@ -48,6 +49,8 @@ def create_app(test_config=None):
     app.jinja_env.filters["dayname"] = lambda iso: datetime.strptime(iso, "%Y-%m-%d").strftime("%A")
     app.jinja_env.globals["STATUS_LABELS"] = STATUS_LABELS
     app.jinja_env.globals["csrf_token"] = csrf_token
+    app.jinja_env.globals["_"] = i18n.gettext
+    app.jinja_env.globals["LANGUAGES"] = i18n.LANGUAGES
 
     @app.before_request
     def load_user_and_check_csrf():
@@ -57,8 +60,10 @@ def create_app(test_config=None):
                                             "FROM users WHERE id = ?", (session["user_id"],)).fetchone()
             if g.user is None:
                 session.pop("user_id", None)  # the account was deleted
+        g.lang = i18n.current_language()
         # Admins may be required to set up two-factor sign-in before anything else.
-        if g.user is not None and request.endpoint not in ("twofactor.manage", "main.logout", "static"):
+        if g.user is not None and request.endpoint not in ("twofactor.manage", "main.logout", "static",
+                                                            "i18n.set_language"):
             from .twofactor import setup_required
             if setup_required(g.user):
                 flash("Administrators must turn on two-factor sign-in before continuing.", "warning")
@@ -83,7 +88,7 @@ def create_app(test_config=None):
         if user is not None and user["role"] in ("admin", "viewer"):
             pending = (db.execute("SELECT COUNT(*) FROM leaves WHERE status = 'pending'").fetchone()[0] +
                        db.execute("SELECT COUNT(*) FROM punch_requests WHERE status = 'pending'").fetchone()[0])
-        return {"company_name": company, "user": user, "pending_requests": pending}
+        return {"company_name": company, "user": user, "pending_requests": pending, "lang": g.get("lang", "en")}
 
     register_cli(app)
     return app
@@ -94,7 +99,7 @@ EMPLOYEE_ENDPOINTS = {
     "static", "main.login", "main.logout", "main.settings",
     "portal.my_attendance", "portal.my_leave", "portal.my_leave_cancel",
     "portal.my_corrections", "portal.my_correction_cancel",
-    "twofactor.manage", "twofactor.login_code",
+    "twofactor.manage", "twofactor.login_code", "i18n.set_language",
 }
 
 

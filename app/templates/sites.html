@@ -1,45 +1,45 @@
 {% extends "base.html" %}
 {% from "_macros.html" import csrf, post_button %}
-{% block title %}Offices{% endblock %}
+{% block title %}{{ _("Offices") }}{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Offices</h1><div class="muted">Locations with their own terminals and bridge PC. Reports, rosters and the dashboard can be filtered by office.</div></div></div>
+<div class="page-head"><div><h1>{{ _("Offices") }}</h1><div class="muted">{{ _("Locations with their own terminals and bridge PC. Reports, rosters and the dashboard can be filtered by office.") }}</div></div></div>
 <div class="card">
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Office</th><th>Address</th><th class="num">Employees</th><th class="num">Terminals</th><th>Own bridge token</th><th></th></tr></thead>
+    <thead><tr><th>{{ _("Office") }}</th><th>{{ _("Address") }}</th><th class="num">{{ _("Employees") }}</th><th class="num">{{ _("Terminals") }}</th><th>{{ _("Own bridge token") }}</th><th></th></tr></thead>
     <tbody>
     {% for s in rows %}
       <tr><td><b>{{ s.name }}</b></td><td class="wrap small">{{ s.address or '' }}</td>
         <td class="num"><a href="{{ url_for('main.employees', site=s.id) }}">{{ s.n_emp }}</a></td><td class="num">{{ s.n_dev }}</td>
-        <td class="wrap">{% if s.bridge_token %}<code>{{ s.bridge_token }}</code>{% else %}<span class="muted small">uses the main token</span>{% endif %}
+        <td class="wrap">{% if s.bridge_token %}<code>{{ s.bridge_token }}</code>{% else %}<span class="muted small">{{ _("uses the main token") }}</span>{% endif %}
           {% if user.role == 'admin' %}<div class="actions" style="margin-top:4px">
             {{ post_button(url_for('main.site_token', sid=s.id), 'New token' if s.bridge_token else 'Create token', 'btn sm', 'The bridge in this office must then use the new token. Continue?' if s.bridge_token else None) }}
-            {% if s.bridge_token %}<form method="post" action="{{ url_for('main.site_token', sid=s.id) }}" class="inline">{{ csrf() }}<input type="hidden" name="remove" value="1"><button class="btn sm" type="submit">Remove</button></form>{% endif %}
+            {% if s.bridge_token %}<form method="post" action="{{ url_for('main.site_token', sid=s.id) }}" class="inline">{{ csrf() }}<input type="hidden" name="remove" value="1"><button class="btn sm" type="submit">{{ _("Remove") }}</button></form>{% endif %}
           </div>{% endif %}</td>
-        <td>{% if user.role == 'admin' %}<div class="actions"><a class="btn sm" href="{{ url_for('main.sites', edit=s.id) }}">Edit</a>
+        <td>{% if user.role == 'admin' %}<div class="actions"><a class="btn sm" href="{{ url_for('main.sites', edit=s.id) }}">{{ _("Edit") }}</a>
           {{ post_button(url_for('main.site_delete', sid=s.id), 'Delete', 'btn sm danger', 'Delete office ' ~ s.name ~ '? Employees and terminals are kept.') }}</div>{% endif %}</td></tr>
-    {% else %}<tr><td colspan="6" class="muted">No offices yet. With a single office you don't need any — add them when you have more than one location.</td></tr>{% endfor %}
+    {% else %}<tr><td colspan="6" class="muted">{{ _("No offices yet. With a single office you don't need any — add them when you have more than one location.") }}</td></tr>{% endfor %}
     </tbody>
   </table>
   </div>
-  {% if rows and unassigned %}<p class="muted small">{{ unassigned }} active employee(s) have no office yet — set it on the Employees page (tick employees → Set office).</p>{% endif %}
+  {% if rows and unassigned %}<p class="muted small">{{ unassigned }} {{ _("active employee(s) have no office yet — set it on the Employees page (tick employees → Set office).") }}</p>{% endif %}
 </div>
 {% if user.role == 'admin' %}
 <div class="card">
   <h2>{{ 'Edit ' ~ edit.name if edit else 'Add office' }}</h2>
   <form method="post" class="form-grid">
     {{ csrf() }}<input type="hidden" name="id" value="{{ edit.id if edit else '' }}">
-    <label>Name<input name="name" value="{{ edit.name if edit else '' }}" required maxlength="80" placeholder="e.g. Head Office, Site B"></label>
-    <label>Address<input name="address" value="{{ edit.address or '' if edit else '' }}" maxlength="200"></label>
-    <div class="full actions"><button class="btn primary" type="submit">Save office</button>{% if edit %}<a class="btn" href="{{ url_for('main.sites') }}">Cancel</a>{% endif %}</div>
+    <label>{{ _("Name") }}<input name="name" value="{{ edit.name if edit else '' }}" required maxlength="80" placeholder="{{ _("e.g. Head Office, Site B") }}"></label>
+    <label>{{ _("Address") }}<input name="address" value="{{ edit.address or '' if edit else '' }}" maxlength="200"></label>
+    <div class="full actions"><button class="btn primary" type="submit">{{ _("Save office") }}</button>{% if edit %}<a class="btn" href="{{ url_for('main.sites') }}">{{ _("Cancel") }}</a>{% endif %}</div>
   </form>
 </div>
 <div class="card">
-  <h2>One bridge PC per office</h2>
+  <h2>{{ _("One bridge PC per office") }}</h2>
   <ol class="small">
-    <li>Give each office its own token above, and set each terminal's <b>Office</b> on the Devices page.</li>
-    <li>On that office's bridge PC, put <code>server_url = {{ server_url }}</code> and the office's token in <code>bridge\bridge.ini</code>.</li>
-    <li>That bridge then only sees and serves its own office's terminals. The main token (Settings) still serves every terminal — use it when one bridge PC can reach all terminals.</li>
+    <li>{{ _("Give each office its own token above, and set each terminal's") }} <b>{{ _("Office") }}</b> {{ _("on the Devices page.") }}</li>
+    <li>{{ _("On that office's bridge PC, put") }} <code>server_url = {{ server_url }}</code> {{ _("and the office's token in") }} <code>bridge\bridge.ini</code>.</li>
+    <li>{{ _("That bridge then only sees and serves its own office's terminals. The main token (Settings) still serves every terminal — use it when one bridge PC can reach all terminals.") }}</li>
   </ol>
 </div>
 {% endif %}

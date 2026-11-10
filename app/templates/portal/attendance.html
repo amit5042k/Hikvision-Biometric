@@ -1,28 +1,27 @@
 {% extends "base.html" %}
-{% block title %}My attendance{% endblock %}
+{% block title %}{{ _("My attendance") }}{% endblock %}
 {% block content %}
 <div class="page-head">
-  <div><h1>Hello, {{ emp.name.split(' ')[0] }}</h1>
+  <div><h1>{{ _("Hello,") }} {{ emp.name.split(' ')[0] }}</h1>
     <div class="muted">#{{ emp.employee_no }}{% if emp.department %} · {{ emp.department }}{% endif %}
-      · Shift: {{ emp.shift_name or 'none' }}{% if emp.start_time %} ({{ emp.start_time }}–{{ emp.end_time }}){% endif %}</div></div>
+      {{ _("· Shift:") }} {{ emp.shift_name or 'none' }}{% if emp.start_time %} ({{ emp.start_time }}–{{ emp.end_time }}){% endif %}</div></div>
   <div class="actions">
-    <a class="btn" href="{{ url_for('portal.my_leave') }}">Apply for leave</a>
-    <a class="btn" href="{{ url_for('portal.my_corrections') }}">Missed a punch?</a>
+    <a class="btn" href="{{ url_for('portal.my_leave') }}">{{ _("Apply for leave") }}</a>
+    <a class="btn" href="{{ url_for('portal.my_corrections') }}">{{ _("Missed a punch?") }}</a>
   </div>
 </div>
 <div class="card">
-  <h2>Today</h2>
+  <h2>{{ _("Today") }}</h2>
   {% if today_punches %}
-    <p>Your punches today: {% for p in today_punches %}<b>{{ p.punch_time[11:16] }}</b>{{ ', ' if not loop.last }}{% endfor %}</p>
-  {% else %}<p class="muted">No punches recorded today yet. New punches can take a few minutes to appear.</p>{% endif %}
+    <p>{{ _("Your punches today:") }} {% for p in today_punches %}<b>{{ p.punch_time[11:16] }}</b>{{ ', ' if not loop.last }}{% endfor %}</p>
+  {% else %}<p class="muted">{{ _("No punches recorded today yet. New punches can take a few minutes to appear.") }}</p>{% endif %}
 </div>
 <div class="card">
   <div class="page-head" style="margin-bottom:10px">
     <h2 style="margin:0">{{ month_label }}</h2>
-    <form class="filters" method="get"><input type="month" name="month" value="{{ month }}"><button class="btn" type="submit">Go</button></form>
+    <form class="filters" method="get"><input type="month" name="month" value="{{ month }}"><button class="btn" type="submit">{{ _("Go") }}</button></form>
   </div>
   {% include "_calendar.html" %}
-  <p class="muted small" style="margin-top:10px">P Present · A Absent · HD Half day · MP Missing punch · L Leave · H Holiday · WO Weekly off.
-    If something looks wrong, <a href="{{ url_for('portal.my_corrections') }}">request a correction</a>.</p>
+  <p class="muted small" style="margin-top:10px">{{ _("P Present · A Absent · HD Half day · MP Missing punch · L Leave · H Holiday · WO Weekly off. If something looks wrong,") }} <a href="{{ url_for('portal.my_corrections') }}">{{ _("request a correction") }}</a>.</p>
 </div>
 {% endblock %}

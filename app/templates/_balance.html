@@ -1,8 +1,8 @@
 <table>
-  <thead><tr><th>Type</th><th class="num">Quota</th><th class="num">Used</th><th class="num">Pending</th><th class="num">Left</th></tr></thead>
+  <thead><tr><th>{{ _("Type") }}</th><th class="num">{{ _("Quota") }}</th><th class="num">{{ _("Used") }}</th><th class="num">{{ _("Pending") }}</th><th class="num">{{ _("Left") }}</th></tr></thead>
   <tbody>
   {% for name, b in balance.items() if b.quota or b.used or b.pending %}
-    <tr><td>{{ name }}{% if not b.paid %} <span class="muted small">(unpaid)</span>{% endif %}</td>
+    <tr><td>{{ name }}{% if not b.paid %} <span class="muted small">{{ _("(unpaid)") }}</span>{% endif %}</td>
       <td class="num">{{ '%g'|format(b.quota) if b.quota else 'No limit' }}</td>
       <td class="num">{{ '%g'|format(b.used) }}</td>
       <td class="num">{{ '%g'|format(b.pending) if b.pending else '' }}</td>

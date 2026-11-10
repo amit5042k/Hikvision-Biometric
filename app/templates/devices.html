@@ -1,29 +1,29 @@
 {% extends "base.html" %}
 {% from "_macros.html" import csrf, post_button %}
-{% block title %}Devices{% endblock %}
+{% block title %}{{ _("Devices") }}{% endblock %}
 {% block content %}
 <div class="page-head">
-  <div><h1>Devices</h1><div class="muted">Hikvision face terminals (DS-K1T320EFWX and other ISAPI access-control models)</div></div>
-  {% if user.role == 'admin' %}<a class="btn primary" href="{{ url_for('main.device_form') }}">+ Add device</a>{% endif %}
+  <div><h1>{{ _("Devices") }}</h1><div class="muted">{{ _("Hikvision face terminals (DS-K1T320EFWX and other ISAPI access-control models)") }}</div></div>
+  {% if user.role == 'admin' %}<a class="btn primary" href="{{ url_for('main.device_form') }}">{{ _("+ Add device") }}</a>{% endif %}
 </div>
 {% for d in devices %}
 <div class="card">
   <div class="page-head" style="margin-bottom:8px">
     <div>
-      <h2 style="margin:0"><span class="dot {{ d.last_status or '' }}"></span>{{ d.name }} {% if not d.enabled %}<span class="badge">disabled</span>{% endif %}</h2>
-      <div class="muted small">{% if d.site %}<b>{{ d.site }}</b> · {% endif %}{{ d.scheme }}://{{ d.host }}:{{ d.port }} · door {{ d.door_no }} · UTC{{ d.tz_offset }}
-        · {% if d.connection == 'bridge' %}<b>via bridge agent</b> (last check-in: {{ d.last_seen_at or 'never – is the bridge running?' }}){% else %}direct{% endif %}
-        {% if d.model %} · {{ d.model }} · S/N {{ d.serial_no }} · FW {{ d.firmware }}{% endif %}</div>
+      <h2 style="margin:0"><span class="dot {{ d.last_status or '' }}"></span>{{ d.name }} {% if not d.enabled %}<span class="badge">{{ _("disabled") }}</span>{% endif %}</h2>
+      <div class="muted small">{% if d.site %}<b>{{ d.site }}</b> · {% endif %}{{ d.scheme }}://{{ d.host }}:{{ d.port }} {{ _("· door") }} {{ d.door_no }} {{ _("· UTC") }}{{ d.tz_offset }}
+        · {% if d.connection == 'bridge' %}<b>{{ _("via bridge agent") }}</b> {{ _("(last check-in:") }} {{ d.last_seen_at or 'never – is the bridge running?' }}){% else %}{{ _("direct") }}{% endif %}
+        {% if d.model %} · {{ d.model }} · S/N {{ d.serial_no }} {{ _("· FW") }} {{ d.firmware }}{% endif %}</div>
     </div>
     {% if user.role == 'admin' %}
     <div class="actions">
-      <a class="btn sm" href="{{ url_for('main.device_form', dev_id=d.id) }}">Edit</a>
+      <a class="btn sm" href="{{ url_for('main.device_form', dev_id=d.id) }}">{{ _("Edit") }}</a>
       {{ post_button(url_for('main.device_delete', dev_id=d.id), 'Delete', 'btn sm danger', 'Remove this device? Punches already downloaded are kept.') }}
     </div>
     {% endif %}
   </div>
   <div class="muted small" style="margin-bottom:12px">
-    Last sync: {{ d.last_sync_at or 'never' }} · Last event: {{ d.last_event_time or '—' }} · {{ d.punch_count }} punches stored
+    {{ _("Last sync:") }} {{ d.last_sync_at or 'never' }} {{ _("· Last event:") }} {{ d.last_event_time or '—' }} · {{ d.punch_count }} {{ _("punches stored") }}
     {% if d.last_status == 'error' %}<div class="flash error" style="margin:8px 0 0">{{ d.last_error }}</div>{% endif %}
   </div>
   {% if user.role == 'admin' %}
@@ -36,58 +36,55 @@
     {{ post_button(url_for('main.device_action', dev_id=d.id, action='open-door'), 'Open door', 'btn', 'Unlock the door now?') }}
   </div>
   <details style="margin-top:14px">
-    <summary>Download punches for a date range</summary>
+    <summary>{{ _("Download punches for a date range") }}</summary>
     <form method="post" action="{{ url_for('main.device_action', dev_id=d.id, action='sync-events') }}" class="filters" style="margin-top:10px">
       {{ csrf() }}
-      <label>From<input type="date" name="start" required></label>
-      <label>To<input type="date" name="end" required></label>
-      <button class="btn" type="submit">Download</button>
+      <label>{{ _("From") }}<input type="date" name="start" required></label>
+      <label>{{ _("To") }}<input type="date" name="end" required></label>
+      <button class="btn" type="submit">{{ _("Download") }}</button>
     </form>
   </details>
   <details style="margin-top:10px">
-    <summary>Real-time push (HTTP listening)</summary>
-    <p class="muted small">The terminal can push every punch to this server instantly. Enter the LAN address the terminal should use to reach this server.
-      Polling still runs as a backup.</p>
+    <summary>{{ _("Real-time push (HTTP listening)") }}</summary>
+    <p class="muted small">{{ _("The terminal can push every punch to this server instantly. Enter the LAN address the terminal should use to reach this server. Polling still runs as a backup.") }}</p>
     <form method="post" action="{{ url_for('main.device_action', dev_id=d.id, action='configure-push') }}" class="filters">
       {{ csrf() }}
-      <label>Server IP<input name="server_ip" placeholder="192.168.1.10" required></label>
-      <label>Port<input name="server_port" type="number" value="{{ request.host.split(':')[1] if ':' in request.host else 80 }}" required></label>
-      <button class="btn" type="submit">Configure push</button>
+      <label>{{ _("Server IP") }}<input name="server_ip" placeholder="192.168.1.10" required></label>
+      <label>{{ _("Port") }}<input name="server_port" type="number" value="{{ request.host.split(':')[1] if ':' in request.host else 80 }}" required></label>
+      <button class="btn" type="submit">{{ _("Configure push") }}</button>
     </form>
   </details>
   {% endif %}
 </div>
 {% else %}
 <div class="card">
-  <h2>No devices configured</h2>
-  <p>Add your DS-K1T320EFWX terminal. On the terminal (or via its web page) note its IP address and admin password, and make sure ISAPI is enabled
-    (<i>Configuration → Network → Advanced → Integration Protocol → Enable ISAPI</i>).</p>
-  {% if user.role == 'admin' %}<a class="btn primary" href="{{ url_for('main.device_form') }}">+ Add device</a>{% endif %}
+  <h2>{{ _("No devices configured") }}</h2>
+  <p>{{ _("Add your DS-K1T320EFWX terminal. On the terminal (or via its web page) note its IP address and admin password, and make sure ISAPI is enabled (") }}<i>{{ _("Configuration → Network → Advanced → Integration Protocol → Enable ISAPI") }}</i>).</p>
+  {% if user.role == 'admin' %}<a class="btn primary" href="{{ url_for('main.device_form') }}">{{ _("+ Add device") }}</a>{% endif %}
 </div>
 {% endfor %}
 {% if jobs %}
 <div class="card">
-  <h2>Recent bridge jobs</h2>
+  <h2>{{ _("Recent bridge jobs") }}</h2>
   <div class="table-wrap"><table>
-    <thead><tr><th>Queued</th><th>Device</th><th>Action</th><th>By</th><th>Status</th><th>Result</th></tr></thead>
+    <thead><tr><th>{{ _("Queued") }}</th><th>{{ _("Device") }}</th><th>{{ _("Action") }}</th><th>{{ _("By") }}</th><th>{{ _("Status") }}</th><th>{{ _("Result") }}</th></tr></thead>
     <tbody>
     {% for j in jobs %}
       <tr><td class="small">{{ j.created_at }}</td><td>{{ j.device }}</td><td>{{ j.action }}</td><td class="small">{{ j.created_by or '' }}</td>
-        <td><span class="badge {{ 's-P' if j.status == 'done' else ('s-A' if j.status == 'failed' else 's-HD') }}">{{ j.status }}</span></td>
+        <td><span class="badge {{ 's-P' if j.status == 'done' else ('s-A' if j.status == 'failed' else 's-HD') }}">{{ _(j.status) }}</span></td>
         <td class="small wrap">{{ j.result or '' }}</td></tr>
     {% endfor %}
     </tbody>
   </table></div>
-  <p class="muted small">Pending jobs run the next time the bridge agent checks in (every ~20 seconds while it is running). Reload this page to see results.</p>
+  <p class="muted small">{{ _("Pending jobs run the next time the bridge agent checks in (every ~20 seconds while it is running). Reload this page to see results.") }}</p>
 </div>
 {% endif %}
 <div class="card">
-  <h2>How punches arrive</h2>
+  <h2>{{ _("How punches arrive") }}</h2>
   <ul class="muted">
-    <li><b>Polling:</b> new events are downloaded from every enabled device every few minutes (set the interval in Settings) –
-      by this server for <i>direct</i> devices, and by the bridge agent for <i>bridge</i> devices.</li>
-    <li><b>Push:</b> optionally, configure the device to send events to <code>{{ url_for('main.device_push', _external=True) }}{% if push_token %}?token=…{% endif %}</code> for instant updates.</li>
-    <li>Duplicates are ignored, so both can run at the same time.</li>
+    <li><b>{{ _("Polling:") }}</b> {{ _("new events are downloaded from every enabled device every few minutes (set the interval in Settings) – by this server for") }} <i>{{ _("direct") }}</i> {{ _("devices, and by the bridge agent for") }} <i>{{ _("bridge") }}</i> {{ _("devices.") }}</li>
+    <li><b>{{ _("Push:") }}</b> {{ _("optionally, configure the device to send events to") }} <code>{{ url_for('main.device_push', _external=True) }}{% if push_token %}?token=…{% endif %}</code> {{ _("for instant updates.") }}</li>
+    <li>{{ _("Duplicates are ignored, so both can run at the same time.") }}</li>
   </ul>
 </div>
 {% endblock %}

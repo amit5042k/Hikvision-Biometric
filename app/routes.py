@@ -1128,6 +1128,8 @@ def settings():
                             value = "%g" % float(value)
                         dbmod.set_setting(db, key, value)
                 dbmod.set_setting(db, "require_2fa_admins", "1" if request.form.get("require_2fa_admins") else "0")
+                if request.form.get("default_language") in ("en", "hi"):
+                    dbmod.set_setting(db, "default_language", request.form["default_language"])
                 _audit("settings.general", "saved")
                 db.commit()
                 flash("Settings saved.", "success")

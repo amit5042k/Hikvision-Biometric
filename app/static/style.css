@@ -137,3 +137,8 @@ td.wrap code { word-break: break-all; }
 table.roster td, table.roster th { padding: 5px 6px; }
 table.roster select { padding: 4px 6px; font-size: 12px; max-width: 120px; }
 table.roster select.set { background: var(--info-bg); border-color: #b8cdee; font-weight: 600; }
+.lang-switch { display: flex; gap: 6px; padding: 8px 16px; }
+.lang-switch a { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid #39414f; color: inherit; text-decoration: none; }
+.lang-switch a.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.login-box .lang-switch a { border-color: var(--border); color: var(--text); }
+.login-box .lang-switch a.on { color: #fff; }

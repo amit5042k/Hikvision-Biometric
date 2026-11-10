@@ -1,26 +1,27 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign in · {{ company_name }}</title>
+  <title>{{ _("Sign in ·") }} {{ company_name }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 <div class="login-wrap">
   <div class="login-box">
     <h1>{{ company_name }}</h1>
-    <p class="muted" style="text-align:center;margin-top:0">Attendance Management</p>
+    <p class="muted" style="text-align:center;margin-top:0">{{ _("Attendance Management") }}</p>
     {% with messages = get_flashed_messages(with_categories=true) %}
-      {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+      {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ _(msg) }}</div>{% endfor %}
     {% endwith %}
     <div class="card">
       <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label class="form-grid"><span class="muted small"><b>Username</b></span><input name="username" autofocus required></label>
-        <label class="form-grid"><span class="muted small"><b>Password</b></span><input name="password" type="password" required></label>
-        <button class="btn primary" type="submit" style="justify-content:center">Sign in</button>
+        <label class="form-grid"><span class="muted small"><b>{{ _("Username") }}</b></span><input name="username" autofocus required></label>
+        <label class="form-grid"><span class="muted small"><b>{{ _("Password") }}</b></span><input name="password" type="password" required></label>
+        <button class="btn primary" type="submit" style="justify-content:center">{{ _("Sign in") }}</button>
       </form>
     </div>
+    <div class="lang-switch" style="justify-content:center">{% for code, name in LANGUAGES.items() %}<a href="{{ url_for('i18n.set_language', code=code) }}" class="{{ 'on' if code == lang }}">{{ name }}</a>{% endfor %}</div>
   </div>
 </div>
 </body>

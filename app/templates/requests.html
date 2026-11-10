@@ -1,47 +1,47 @@
 {% extends "base.html" %}
 {% from "_macros.html" import csrf %}
-{% block title %}Requests{% endblock %}
+{% block title %}{{ _("Requests") }}{% endblock %}
 {% macro decide(kind, id) %}
   {% if user.role == 'admin' %}
   <form method="post" class="inline-form" action="">
     {{ csrf() }}
-    <input name="note" placeholder="Note (optional)" maxlength="500" style="width:150px">
-    <button class="btn sm primary" type="submit" formaction="{{ url_for('main.request_decide', kind=kind, req_id=id, decision='approve') }}">Approve</button>
-    <button class="btn sm danger" type="submit" formaction="{{ url_for('main.request_decide', kind=kind, req_id=id, decision='reject') }}">Reject</button>
+    <input name="note" placeholder="{{ _("Note (optional)") }}" maxlength="500" style="width:150px">
+    <button class="btn sm primary" type="submit" formaction="{{ url_for('main.request_decide', kind=kind, req_id=id, decision='approve') }}">{{ _("Approve") }}</button>
+    <button class="btn sm danger" type="submit" formaction="{{ url_for('main.request_decide', kind=kind, req_id=id, decision='reject') }}">{{ _("Reject") }}</button>
   </form>
-  {% else %}<span class="muted small">Admin decides</span>{% endif %}
+  {% else %}<span class="muted small">{{ _("Admin decides") }}</span>{% endif %}
 {% endmacro %}
 {% block content %}
-<div class="page-head"><div><h1>Requests</h1><div class="muted">Leave applications and missed-punch corrections from employees</div></div></div>
+<div class="page-head"><div><h1>{{ _("Requests") }}</h1><div class="muted">{{ _("Leave applications and missed-punch corrections from employees") }}</div></div></div>
 
 <div class="card">
-  <h2>Leave requests ({{ leave_rows|length }})</h2>
+  <h2>{{ _("Leave requests (") }}{{ leave_rows|length }})</h2>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Employee</th><th>Dates</th><th>Type</th><th>Balance {{ year }}</th><th>Reason</th><th>Asked</th><th></th></tr></thead>
+    <thead><tr><th>{{ _("Employee") }}</th><th>{{ _("Dates") }}</th><th>{{ _("Type") }}</th><th>{{ _("Balance") }} {{ year }}</th><th>{{ _("Reason") }}</th><th>{{ _("Asked") }}</th><th></th></tr></thead>
     <tbody>
     {% for l in leave_rows %}{% set b = balances.get(l.employee_id, {}).get(l.leave_type) %}
       <tr>
         <td>{{ l.name }} <span class="muted">#{{ l.employee_no }}</span></td>
-        <td>{{ l.start_date }}{% if l.end_date != l.start_date %} → {{ l.end_date }}{% endif %}{% if l.half_day %} (half day){% endif %}</td>
+        <td>{{ l.start_date }}{% if l.end_date != l.start_date %} → {{ l.end_date }}{% endif %}{% if l.half_day %} {{ _("(half day)") }}{% endif %}</td>
         <td><span class="badge s-L">{{ l.leave_type }}</span></td>
-        <td class="small">{% if b and b.quota %}<span class="{{ 'bal-low' if b.left <= 0 }}">{{ '%g'|format(b.left) }} of {{ '%g'|format(b.quota) }} left</span>{% else %}No limit{% endif %}</td>
+        <td class="small">{% if b and b.quota %}<span class="{{ 'bal-low' if b.left <= 0 }}">{{ '%g'|format(b.left) }} {{ _("of") }} {{ '%g'|format(b.quota) }} {{ _("left") }}</span>{% else %}{{ _("No limit") }}{% endif %}</td>
         <td class="wrap small">{{ l.reason or '' }}</td>
         <td class="small muted">{{ l.created_at[:16] }}</td>
         <td>{{ decide('leave', l.id) }}</td>
       </tr>
-    {% else %}<tr><td colspan="7" class="muted">No leave requests waiting.</td></tr>{% endfor %}
+    {% else %}<tr><td colspan="7" class="muted">{{ _("No leave requests waiting.") }}</td></tr>{% endfor %}
     </tbody>
   </table>
   </div>
 </div>
 
 <div class="card">
-  <h2>Punch corrections ({{ punch_rows|length }})</h2>
-  <p class="muted small">Approving adds the punch to the log (marked as a manual correction), and attendance updates straight away.</p>
+  <h2>{{ _("Punch corrections (") }}{{ punch_rows|length }})</h2>
+  <p class="muted small">{{ _("Approving adds the punch to the log (marked as a manual correction), and attendance updates straight away.") }}</p>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Employee</th><th>Punch time</th><th>Reason</th><th>Asked</th><th></th></tr></thead>
+    <thead><tr><th>{{ _("Employee") }}</th><th>{{ _("Punch time") }}</th><th>{{ _("Reason") }}</th><th>{{ _("Asked") }}</th><th></th></tr></thead>
     <tbody>
     {% for r in punch_rows %}
       <tr>
@@ -51,7 +51,7 @@
         <td class="small muted">{{ r.created_at[:16] }}</td>
         <td>{{ decide('punch', r.id) }}</td>
       </tr>
-    {% else %}<tr><td colspan="5" class="muted">No correction requests waiting.</td></tr>{% endfor %}
+    {% else %}<tr><td colspan="5" class="muted">{{ _("No correction requests waiting.") }}</td></tr>{% endfor %}
     </tbody>
   </table>
   </div>
@@ -59,13 +59,13 @@
 
 {% if recent %}
 <div class="card">
-  <h2>Recently decided</h2>
+  <h2>{{ _("Recently decided") }}</h2>
   <div class="table-wrap"><table>
-    <thead><tr><th>When</th><th>Kind</th><th>Employee</th><th>Request</th><th>Decision</th><th>Note</th></tr></thead>
+    <thead><tr><th>{{ _("When") }}</th><th>{{ _("Kind") }}</th><th>{{ _("Employee") }}</th><th>{{ _("Request") }}</th><th>{{ _("Decision") }}</th><th>{{ _("Note") }}</th></tr></thead>
     <tbody>
     {% for r in recent %}
-      <tr><td class="small">{{ (r.decided_at or '')[:16] }}</td><td>{{ r.kind }}</td><td>{{ r.name }}</td><td class="small">{{ r.what }}</td>
-        <td><span class="badge s-{{ r.status }}">{{ r.status }}</span> <span class="muted small">by {{ r.decided_by }}</span></td>
+      <tr><td class="small">{{ (r.decided_at or '')[:16] }}</td><td>{{ _(r.kind) }}</td><td>{{ r.name }}</td><td class="small">{{ r.what }}</td>
+        <td><span class="badge s-{{ r.status }}">{{ _(r.status) }}</span> <span class="muted small">{{ _("by") }} {{ r.decided_by }}</span></td>
         <td class="wrap small">{{ r.decision_note or '' }}</td></tr>
     {% endfor %}
     </tbody>
