@@ -6,6 +6,12 @@
   <div><h1>Dashboard</h1><div class="muted">{{ today.strftime('%A, %d %B %Y') }}</div></div>
   <a class="btn" href="{{ url_for('main.attendance_daily') }}">Today's attendance →</a>
 </div>
+{% if pending %}
+<div class="flash warning" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+  <span><b>{{ pending }}</b> employee request(s) waiting for approval.</span>
+  <a class="btn sm" href="{{ url_for('main.requests_page') }}">Review requests →</a>
+</div>
+{% endif %}
 <div class="stats">
   <div class="stat"><div class="num">{{ counts.total }}</div><div class="lbl">Active employees</div></div>
   <div class="stat ok"><div class="num">{{ counts.P }}</div><div class="lbl">Present</div></div>

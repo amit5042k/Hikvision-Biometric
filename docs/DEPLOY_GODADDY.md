@@ -176,6 +176,16 @@ cPanel → **Advanced → Cron Jobs** → add:
 
 The last 30 daily copies are kept in `~/attendance-data/backups/`.
 
+**Daily email summary (optional).** cPanel cannot run background tasks, so the email is sent from cron instead. First fill in **Settings → Daily email summary**. Then add a second cron job:
+
+- Common setting: *Every 15 minutes*.
+- Command (one line):
+  ```
+  cd ~/Hikvision-Biometric && ATTENDANCE_DATA_DIR=~/attendance-data ~/virtualenv/Hikvision-Biometric/3.11/bin/flask --app app send-daily-report
+  ```
+
+Use the same Python version folder as in step A6. The command does nothing until the report time you set, then sends once per day. On a VPS (Part B) the app sends it by itself.
+
 Now continue with **Part C**.
 
 ---

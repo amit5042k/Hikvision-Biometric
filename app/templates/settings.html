@@ -17,7 +17,7 @@
       <label>Count punches from (hours before shift)<input type="number" step="0.5" min="0" name="window_before_hours" value="{{ settings.window_before_hours }}"></label>
       <label>Minimum overtime (minutes)<input type="number" min="0" name="ot_min_minutes" value="{{ settings.ot_min_minutes }}"></label>
       <label>Push endpoint token<input name="push_token" value="{{ settings.push_token }}" placeholder="optional">
-        <span class="muted small" style="font-weight:400">When set, device pushes must include ?token=…</span></label>
+        <span class="muted small" style="font-weight:400">Recommended when hosted online. When set, device pushes must include ?token=…; when empty, pushes are only accepted from a registered terminal's IP address.</span></label>
       <div class="full"><button class="btn primary" type="submit">Save settings</button></div>
     </form>
   </div>
@@ -31,20 +31,6 @@
         <td>{{ post_button(url_for('main.department_delete', did=d.id), 'Delete', 'btn sm danger', 'Delete department ' ~ d.name ~ '?') }}</td></tr>
       {% else %}<tr><td class="muted">No departments yet.</td></tr>{% endfor %}
     </tbody></table>
-  </div>
-  <div class="card">
-    <h2>Users</h2>
-    <table><tbody>
-      {% for u in users %}<tr><td>{{ u.username }}</td><td><span class="badge">{{ u.role }}</span></td>
-        <td>{% if u.id != user.id %}<form method="post" class="inline" data-confirm="Delete user {{ u.username }}?">{{ csrf() }}<input type="hidden" name="form" value="delete_user"><input type="hidden" name="user_id" value="{{ u.id }}"><button class="btn sm danger">Delete</button></form>{% endif %}</td></tr>{% endfor %}
-    </tbody></table>
-    <form method="post" class="filters" style="margin-top:12px">
-      {{ csrf() }}<input type="hidden" name="form" value="user">
-      <label>Username<input name="username" required></label>
-      <label>Password<input name="password" type="password" minlength="6" required></label>
-      <label>Role<select name="role"><option value="admin">Admin</option><option value="viewer">Viewer (read-only)</option></select></label>
-      <button class="btn" type="submit">Add user</button>
-    </form>
   </div>
   <div class="card">
     <h2>Bridge agent</h2>
@@ -77,4 +63,63 @@
     </form>
   </div>
 </div>
+{% if user.role == 'admin' %}
+<div class="card">
+  <h2>Users &amp; logins</h2>
+  <p class="muted small"><b>Admin</b>: everything · <b>Viewer</b>: read-only reports · <b>Employee</b>: own attendance, leave requests and punch corrections only.
+    The quickest way to give an employee a login is the <i>Self-service login</i> box on their employee page.</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Username</th><th>Role</th><th>Employee</th><th>Change role</th><th>Reset password</th><th></th></tr></thead>
+    <tbody>
+    {% for u in users %}
+      <tr>
+        <td><b>{{ u.username }}</b>{% if u.id == user.id %} <span class="muted small">(you)</span>{% endif %}</td>
+        <td><span class="badge">{{ roles[u.role] if u.role in roles else u.role }}</span></td>
+        <td>{{ u.employee_name ~ ' #' ~ u.employee_no if u.employee_name else '' }}</td>
+        <td>{% if u.role != 'employee' %}
+          <form method="post" class="inline-form">{{ csrf() }}<input type="hidden" name="form" value="set_role"><input type="hidden" name="user_id" value="{{ u.id }}">
+            <select name="role">{% for r in ('admin', 'viewer') %}<option value="{{ r }}" {{ 'selected' if u.role == r }}>{{ roles[r] }}</option>{% endfor %}</select>
+            <button class="btn sm" type="submit">Set</button></form>{% endif %}</td>
+        <td><form method="post" class="inline-form">{{ csrf() }}<input type="hidden" name="form" value="reset_password"><input type="hidden" name="user_id" value="{{ u.id }}">
+            <input name="new_password" type="password" minlength="6" required placeholder="New password" autocomplete="new-password" style="width:140px">
+            <button class="btn sm" type="submit">Reset</button></form></td>
+        <td>{% if u.id != user.id %}<form method="post" class="inline" data-confirm="Delete user {{ u.username }}?">{{ csrf() }}<input type="hidden" name="form" value="delete_user"><input type="hidden" name="user_id" value="{{ u.id }}"><button class="btn sm danger">Delete</button></form>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <form method="post" class="filters" style="margin-top:12px">
+    {{ csrf() }}<input type="hidden" name="form" value="user">
+    <label>Username<input name="username" required maxlength="40"></label>
+    <label>Password<input name="password" type="password" minlength="6" required autocomplete="new-password"></label>
+    <label>Role<select name="role" onchange="this.form.employee_id.parentElement.style.display = this.value === 'employee' ? '' : 'none'">
+      {% for r, label in roles.items() %}<option value="{{ r }}">{{ label }}</option>{% endfor %}</select></label>
+    <label style="display:none">Employee<select name="employee_id"><option value="">Select…</option>
+      {% for e in employees_without_login %}<option value="{{ e.id }}">{{ e.name }} (#{{ e.employee_no }})</option>{% endfor %}</select></label>
+    <button class="btn" type="submit">Add user</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Daily email summary</h2>
+  <p class="muted small">Each day at the chosen time, the recipients get today's present / absent / late / on-leave lists, pending requests and device problems.
+    Use your email provider's SMTP details (e.g. GoDaddy Professional Email: <code>smtpout.secureserver.net</code>, port 465, SSL; Gmail: <code>smtp.gmail.com</code>, 587, STARTTLS with an app password).
+    {% if settings.report_last_sent %}Last sent: {{ settings.report_last_sent }}.{% endif %}</p>
+  <form method="post" class="form-grid">
+    {{ csrf() }}<input type="hidden" name="form" value="email">
+    <label>SMTP server<input name="smtp_host" value="{{ settings.smtp_host }}" placeholder="smtp.example.com"></label>
+    <label>Port<input name="smtp_port" type="number" value="{{ settings.smtp_port }}"></label>
+    <label>Security<select name="smtp_security">{% for v, l in [('starttls', 'STARTTLS (587)'), ('ssl', 'SSL (465)'), ('none', 'None')] %}<option value="{{ v }}" {{ 'selected' if settings.smtp_security == v }}>{{ l }}</option>{% endfor %}</select></label>
+    <label>Username<input name="smtp_user" value="{{ settings.smtp_user }}" autocomplete="off"></label>
+    <label>Password<input name="smtp_password" type="password" autocomplete="new-password" placeholder="{{ 'Saved - leave blank to keep' if settings.smtp_password else '' }}"></label>
+    <label>From address<input name="smtp_from" value="{{ settings.smtp_from }}" placeholder="attendance@yourcompany.com"></label>
+    <label class="full">Send to (comma separated)<input name="report_recipients" value="{{ settings.report_recipients }}" placeholder="hr@yourcompany.com, owner@yourcompany.com"></label>
+    <label>Send every day at<input name="report_time" type="time" value="{{ settings.report_time }}"></label>
+    <div class="full actions"><button class="btn primary" type="submit">Save email settings</button></div>
+  </form>
+  <form method="post" style="margin-top:10px">{{ csrf() }}<input type="hidden" name="form" value="send_report"><button class="btn" type="submit">Send today's summary now</button></form>
+</div>
+{% endif %}
 {% endblock %}

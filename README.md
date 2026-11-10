@@ -25,9 +25,22 @@ It pulls punches from the terminal over the LAN, applies shifts, holidays and le
   - Monthly muster roll and monthly summary with payable days.
   - Per-employee calendar.
   - Raw punch log.
-  - Every report exports to CSV and has a print layout.
-- **Leave and holiday management**, and manual punch correction with an audit note.
-- **Users**: admin and read-only viewer roles, CSRF-protected forms, and a responsive layout that works on phones.
+  - Every report exports to CSV and has a print layout. The monthly report also exports to a formatted Excel workbook (muster roll + summary).
+- **Leave**:
+  - Leave types with yearly quotas, paid or unpaid. Unpaid leave is left out of payable days.
+  - Balances per employee: used, pending and remaining days.
+  - Holidays and weekly offs inside a leave period are not deducted.
+- **Employee self-service** (role *Employee*, linked to one employee):
+  - Employees see their own attendance calendar and leave balance.
+  - They apply for leave and request missed-punch corrections, and can withdraw pending requests.
+  - They see nothing else.
+- **Approvals**: admins approve or reject leave and correction requests from the **Requests** page. An approved correction adds the punch automatically.
+- **Audit log** of admin actions: who changed what, and when. Searchable and exportable.
+- **Daily email summary**: present, absent, late, on-leave, pending requests and device problems, sent over SMTP at a set time.
+- **Users and security**:
+  - Admin, viewer and employee roles; admins can reset passwords and change roles. The last admin cannot be removed.
+  - Sign-in lockout after repeated failures, CSRF-protected forms.
+  - Responsive layout that works on phones.
 
 ## Quick start
 
@@ -69,6 +82,7 @@ Other commands:
 flask --app app sync          # download punches from all devices once (e.g. from cron)
 flask --app app reset-admin   # reset the admin password to "admin"
 flask --app app backup        # copy the database into <data dir>/backups
+flask --app app send-daily-report [--force]   # email the daily summary when due (for cron)
 ```
 
 ## Terminal preparation (DS-K1T320EFWX)

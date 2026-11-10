@@ -126,3 +126,11 @@ code { background: #f1f3f7; padding: 1px 5px; border-radius: 4px; font-size: 12p
   body { background: #fff; }
 }
 td.wrap code { word-break: break-all; }
+.nav .count { display: inline-block; min-width: 18px; padding: 0 6px; margin-left: 4px; border-radius: 9px; background: #fff; color: var(--accent); font-size: 11px; font-weight: 700; text-align: center; }
+.nav a.active .count { background: #fff; }
+.s-pending { background: var(--warn-bg); color: var(--warn); }
+.s-approved { background: var(--ok-bg); color: var(--ok); }
+.s-rejected { background: var(--bad-bg); color: var(--bad); }
+.bal-low { color: var(--bad); font-weight: 700; }
+.inline-form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.inline-form input { padding: 4px 8px; }

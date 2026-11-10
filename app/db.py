@@ -15,6 +15,16 @@ DEFAULT_SETTINGS = {
     "ot_min_minutes": "30",          # overtime below this is ignored
     "push_token": "",                # required ?token= on the device push endpoint when set
     "bridge_token": "",              # shared secret for the on-site bridge agent (generated on first run)
+    # daily email summary
+    "smtp_host": "",
+    "smtp_port": "587",
+    "smtp_user": "",
+    "smtp_password": "",
+    "smtp_from": "",
+    "smtp_security": "starttls",     # starttls | ssl | none
+    "report_recipients": "",         # comma separated
+    "report_time": "19:00",          # when the daily summary is sent (server local time)
+    "report_last_sent": "",
 }
 
 # Schema changes after the first release.
@@ -49,6 +59,46 @@ MIGRATIONS = [
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
         CREATE INDEX idx_login_attempts ON login_attempts (username, created_at);
+    """),
+    (4, """
+        -- employee self-service logins: role 'employee' linked to one employee
+        ALTER TABLE users ADD COLUMN employee_id INTEGER REFERENCES employees(id) ON DELETE CASCADE;
+        -- leave approval workflow; leave recorded before this version counts as approved
+        ALTER TABLE leaves ADD COLUMN status TEXT NOT NULL DEFAULT 'approved';  -- pending | approved | rejected
+        ALTER TABLE leaves ADD COLUMN requested_by TEXT;
+        ALTER TABLE leaves ADD COLUMN decided_by TEXT;
+        ALTER TABLE leaves ADD COLUMN decided_at TEXT;
+        ALTER TABLE leaves ADD COLUMN decision_note TEXT;
+        CREATE TABLE leave_types (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            name         TEXT NOT NULL UNIQUE,
+            yearly_quota REAL NOT NULL DEFAULT 0,   -- days per calendar year; 0 = no limit
+            paid         INTEGER NOT NULL DEFAULT 1
+        );
+        INSERT INTO leave_types (name, yearly_quota, paid) VALUES
+            ('Casual', 12, 1), ('Sick', 12, 1), ('Earned', 15, 1), ('Comp Off', 0, 1),
+            ('Maternity', 0, 1), ('Unpaid', 0, 0), ('Other', 0, 1);
+        -- missed-punch correction requests from employees
+        CREATE TABLE punch_requests (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            employee_id   INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+            punch_time    TEXT NOT NULL,
+            reason        TEXT,
+            status        TEXT NOT NULL DEFAULT 'pending',  -- pending | approved | rejected
+            requested_by  TEXT,
+            decided_by    TEXT,
+            decided_at    TEXT,
+            decision_note TEXT,
+            created_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        );
+        CREATE TABLE audit_log (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            at       TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+            username TEXT,
+            action   TEXT NOT NULL,
+            details  TEXT
+        );
+        CREATE INDEX idx_audit_at ON audit_log (at);
     """),
 ]
 SCHEMA_VERSION = MIGRATIONS[-1][0] if MIGRATIONS else 1
@@ -168,3 +218,9 @@ def set_setting(db, key, value):
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         (key, value),
     )
+
+
+def audit(db, username, action, details=""):
+    """Record who did what. The caller commits."""
+    db.execute("INSERT INTO audit_log (username, action, details) VALUES (?, ?, ?)",
+               (username, action, (details or "")[:1000]))

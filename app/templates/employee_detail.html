@@ -18,28 +18,7 @@
     <h2 style="margin:0">{{ month_label }}</h2>
     <form class="filters" method="get"><input type="month" name="month" value="{{ month }}"><button class="btn" type="submit">Go</button></form>
   </div>
-  <div class="stats">
-    <div class="stat ok"><div class="num">{{ summary.present }}</div><div class="lbl">Present</div></div>
-    <div class="stat bad"><div class="num">{{ summary.absent }}</div><div class="lbl">Absent</div></div>
-    <div class="stat info"><div class="num">{{ summary.leave }}</div><div class="lbl">Leave</div></div>
-    <div class="stat warn"><div class="num">{{ summary.late }}</div><div class="lbl">Late days</div></div>
-    <div class="stat"><div class="num">{{ summary.work_minutes|hm or '0:00' }}</div><div class="lbl">Work hours</div></div>
-    <div class="stat"><div class="num">{{ summary.ot_minutes|hm or '0:00' }}</div><div class="lbl">Overtime</div></div>
-    <div class="stat"><div class="num">{{ summary.payable }}</div><div class="lbl">Payable days</div></div>
-  </div>
-  <div class="calendar">
-    {% for w in weekdays %}<div class="hd">{{ w }}</div>{% endfor %}
-    {% for _ in range(pad) %}<div></div>{% endfor %}
-    {% for d in days %}
-      <div class="cell {{ 'today' if d.date == d.date.today() }}">
-        <div class="d">{{ d.date.day }} {{ badge(d) }}</div>
-        {% if d.first_in %}<div>{{ d.first_in.strftime('%H:%M') }}{% if d.last_out %} – {{ d.last_out.strftime('%H:%M') }}{% endif %}</div>{% endif %}
-        {% if d.work_minutes %}<div class="muted">{{ d.work_minutes|hm }} h</div>{% endif %}
-        {% if d.late_minutes %}<div class="late">Late {{ d.late_minutes }}m</div>{% endif %}
-        {% if d.remarks and not d.first_in %}<div class="muted">{{ d.remarks|join(', ') }}</div>{% endif %}
-      </div>
-    {% endfor %}
-  </div>
+  {% include "_calendar.html" %}
 </div>
 
 <div class="grid grid-2">
@@ -52,9 +31,13 @@
       <tr><td class="muted">Joined</td><td>{{ emp.join_date or '—' }}</td></tr>
       <tr><td class="muted">Face enrolled</td><td>{{ 'Yes' if emp.has_face else 'No' }}</td></tr>
       <tr><td class="muted">Status</td><td>{{ 'Active' if emp.active else 'Inactive' }}</td></tr>
+      <tr><td class="muted">Self-service login</td><td>{{ login.username if login else 'None' }}</td></tr>
     </tbody></table>
+    <h2 style="margin-top:18px">Leave balance {{ year }}</h2>
+    {% include "_balance.html" %}
     <h2 style="margin-top:18px">Recent leave</h2>
-    {% for l in leaves %}<div>{{ l.start_date }}{% if l.end_date != l.start_date %} → {{ l.end_date }}{% endif %} · {{ l.leave_type }}{% if l.half_day %} (half){% endif %}</div>
+    {% for l in leaves %}<div>{{ l.start_date }}{% if l.end_date != l.start_date %} → {{ l.end_date }}{% endif %} · {{ l.leave_type }}{% if l.half_day %} (half){% endif %}
+      <span class="badge s-{{ l.status }}">{{ l.status }}</span></div>
     {% else %}<p class="muted">None.</p>{% endfor %}
   </div>
   {% if user.role == 'admin' %}
@@ -74,6 +57,16 @@
       <input type="datetime-local" name="punch_time" required><input name="note" placeholder="Reason">
       <button class="btn" type="submit">Add</button>
     </form>
+    {% if not login %}
+    <h2 style="margin-top:18px">Self-service login</h2>
+    <p class="muted small">Lets {{ emp.name }} sign in to see their own attendance, apply for leave and request punch corrections.</p>
+    <form method="post" action="{{ url_for('main.employee_login_create', emp_id=emp.id) }}" class="filters">
+      {{ csrf() }}
+      <label>Username<input name="username" value="{{ emp.employee_no }}" required maxlength="40"></label>
+      <label>Password<input name="password" type="password" minlength="6" required autocomplete="new-password"></label>
+      <button class="btn" type="submit">Create login</button>
+    </form>
+    {% endif %}
     <h2 style="margin-top:18px">Remove</h2>
     <form method="post" action="{{ url_for('main.employee_delete', emp_id=emp.id) }}" data-confirm="Remove {{ emp.name }}?">
       {{ csrf() }}

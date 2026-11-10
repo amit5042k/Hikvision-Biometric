@@ -4,6 +4,7 @@
 <div class="page-head">
   <div><h1>Monthly report</h1><div class="muted">{{ month_label }}</div></div>
   <div class="actions no-print">
+    <a class="btn primary" href="{{ url_for('main.report_monthly', month=month, department=dept or '', export='xlsx') }}">Excel (.xlsx)</a>
     <a class="btn" href="{{ url_for('main.report_monthly', month=month, department=dept or '', export='muster') }}">Muster roll CSV</a>
     <a class="btn" href="{{ url_for('main.report_monthly', month=month, department=dept or '', export='summary') }}">Summary CSV</a>
     <a class="btn" href="{{ url_for('main.report_monthly', month=month, department=dept or '', export='detail') }}">Daily detail CSV</a>
@@ -55,6 +56,6 @@
   </table>
   {% endif %}
   </div>
-  <p class="muted small"><span class="late">late</span> marks a late arrival. Payable = present (half days count 0.5) + leave + holidays + weekly offs. Missing punch days count as present — correct them by adding a manual punch.</p>
+  <p class="muted small"><span class="late">late</span> marks a late arrival. Payable = present (half days count 0.5) + paid leave + holidays + weekly offs. Missing punch days count as present — correct them by adding a manual punch.</p>
 </div>
 {% endblock %}

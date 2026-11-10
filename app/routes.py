@@ -12,8 +12,9 @@ from flask import (Blueprint, Response, current_app, flash, g, jsonify, redirect
                    send_file, session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from . import admin_required, login_required
+from . import admin_required, login_required, staff_required
 from . import attendance as att
+from . import leave as lv
 from . import db as dbmod
 from . import sync
 from .db import get_db
@@ -62,6 +63,10 @@ def _csv(filename, header, rows):
                     headers={"Content-Disposition": f"attachment; filename={filename}"})
 
 
+def _audit(action, details=""):
+    dbmod.audit(get_db(), g.user["username"] if g.get("user") else None, action, details)
+
+
 def _lookups():
     db = get_db()
     return {
@@ -83,6 +88,7 @@ def login():
         user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
         if user and check_password_hash(user["password_hash"], request.form.get("password", "")):
             db.execute("DELETE FROM login_attempts WHERE username = ?", (username,))
+            dbmod.audit(db, username, "login", request.remote_addr or "")
             db.commit()
             token = session.get("csrf_token")
             session.clear()
@@ -91,6 +97,8 @@ def login():
                 session["csrf_token"] = token
             if request.form.get("password") == "admin" and user["username"] == "admin":
                 flash("You are using the default password. Please change it in Settings.", "warning")
+            if user["role"] == "employee":
+                return redirect(url_for("portal.my_attendance"))
             return redirect(_safe_next(request.args.get("next")))
         db.execute("INSERT INTO login_attempts (username, ip) VALUES (?, ?)", (username, request.remote_addr))
         db.commit()
@@ -129,7 +137,7 @@ def logout():
 
 # ----------------------------------------------------------- dashboard ----
 @bp.route("/")
-@login_required
+@staff_required
 def dashboard():
     db = get_db()
     today = date.today()
@@ -165,13 +173,15 @@ def dashboard():
         "LEFT JOIN devices dv ON dv.id = p.device_id ORDER BY p.punch_time DESC LIMIT 15").fetchall()
     devices = db.execute("SELECT * FROM devices ORDER BY name").fetchall()
     late_today = [(e, days[0]) for e, days, _ in rows if days[0].is_late]
-    return render_template("dashboard.html", counts=counts, recent=recent, devices=devices,
+    pending = (db.execute("SELECT COUNT(*) FROM leaves WHERE status = 'pending'").fetchone()[0] +
+               db.execute("SELECT COUNT(*) FROM punch_requests WHERE status = 'pending'").fetchone()[0])
+    return render_template("dashboard.html", counts=counts, recent=recent, devices=devices, pending=pending,
                            trend=trend, trend_max=trend_max, late_today=late_today, today=today)
 
 
 # ----------------------------------------------------------- employees ----
 @bp.route("/employees")
-@login_required
+@staff_required
 def employees():
     db = get_db()
     q = request.args.get("q", "").strip()
@@ -250,6 +260,7 @@ def employee_form(emp_id=None):
                     cur = db.execute(f"INSERT INTO employees ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
                                      [data[c] for c in cols])
                     emp_id = cur.lastrowid
+                _audit("employee.update" if emp else "employee.create", f"#{data['employee_no']} {data['name']}")
                 db.commit()
                 msg = "Employee saved."
                 if f.get("push"):
@@ -282,7 +293,7 @@ def _dispatch_all(action, payload, device_ids=None):
 
 
 @bp.route("/employees/<int:emp_id>")
-@login_required
+@staff_required
 def employee_detail(emp_id):
     db = get_db()
     emps = att.load_employees(db, employee_id=emp_id, include_inactive=True)
@@ -293,11 +304,14 @@ def employee_detail(emp_id):
     _, days, summary = att.compute(db, start, end, emps)[0]
     leaves = db.execute("SELECT * FROM leaves WHERE employee_id = ? ORDER BY start_date DESC LIMIT 20",
                         (emp_id,)).fetchall()
+    login = db.execute("SELECT username FROM users WHERE employee_id = ?", (emp_id,)).fetchone()
+    balance = lv.balances(db, start.year, [emp_id])[emp_id]
     # calendar padding so the 1st falls on the right weekday column
     pad = start.weekday()
     return render_template("employee_detail.html", emp=emps[0], days=days, summary=summary, leaves=leaves,
                            month=start.strftime("%Y-%m"), month_label=start.strftime("%B %Y"), pad=pad,
-                           weekdays=WEEKDAYS, devices=_lookups()["devices"])
+                           weekdays=WEEKDAYS, devices=_lookups()["devices"], login=login, balance=balance,
+                           year=start.year)
 
 
 @bp.route("/employees/<int:emp_id>/push", methods=["POST"])
@@ -343,6 +357,8 @@ def employee_delete(emp_id):
         db.execute("DELETE FROM punches WHERE employee_no = ?", (emp["employee_no"],))
         db.execute("DELETE FROM employees WHERE id = ?", (emp_id,))
         text = f"{emp['name']} deleted."
+    _audit("employee.deactivate" if request.form.get("keep_history") else "employee.delete",
+           f"#{emp['employee_no']} {emp['name']}")
     db.commit()
     flash(text, "success")
     return redirect(url_for("main.employees"))
@@ -398,6 +414,7 @@ def employees_import_csv():
                        "join_date, shift_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT MIN(id) FROM shifts))",
                        (no, *fields.values()))
             added += 1
+    _audit("employee.import", f"{added} new, {updated} updated")
     db.commit()
     msg = f"Imported {added} new and updated {updated} employees."
     if skipped:
@@ -407,7 +424,7 @@ def employees_import_csv():
 
 
 @bp.route("/employees/export.csv")
-@login_required
+@staff_required
 def employees_export():
     rows = att.load_employees(get_db(), include_inactive=True)
     return _csv("employees.csv",
@@ -420,7 +437,7 @@ def employees_export():
 
 # ------------------------------------------------------------- devices ----
 @bp.route("/devices")
-@login_required
+@staff_required
 def devices():
     db = get_db()
     rows = db.execute("SELECT d.*, (SELECT COUNT(*) FROM punches p WHERE p.device_id = d.id) AS punch_count "
@@ -462,6 +479,7 @@ def device_form(dev_id=None):
             else:
                 dev_id = db.execute(f"INSERT INTO devices ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
                                     [data[c] for c in cols]).lastrowid
+            _audit("device.save", f"{data['name']} ({data['host']}, {data['connection']})")
             db.commit()
             flash("Device saved. Use “Test” to verify the connection.", "success")
             return redirect(url_for("main.devices"))
@@ -473,7 +491,9 @@ def device_form(dev_id=None):
 @admin_required
 def device_delete(dev_id):
     db = get_db()
+    dev = db.execute("SELECT name FROM devices WHERE id = ?", (dev_id,)).fetchone()
     db.execute("DELETE FROM devices WHERE id = ?", (dev_id,))
+    _audit("device.delete", dev["name"] if dev else str(dev_id))
     db.commit()
     flash("Device removed. Its punches are kept.", "success")
     return redirect(url_for("main.devices"))
@@ -508,6 +528,8 @@ def device_action(dev_id, action):
     elif action not in ("test", "sync-users", "set-time", "open-door"):
         flash("Unknown action.", "error")
         return redirect(url_for("main.devices"))
+    _audit(f"device.{action}", dev["name"])
+    db.commit()
     category, message = sync.dispatch(db, dev, action, payload, g.user["username"])
     flash(message, category)
     return redirect(request.referrer or url_for("main.devices"))
@@ -547,7 +569,7 @@ def device_push():
 
 # ---------------------------------------------------------- attendance ----
 @bp.route("/attendance")
-@login_required
+@staff_required
 def attendance_daily():
     db = get_db()
     day = att.parse_date(request.args.get("date"), date.today())
@@ -573,7 +595,7 @@ def attendance_daily():
 
 
 @bp.route("/punches")
-@login_required
+@staff_required
 def punches():
     db = get_db()
     start = att.parse_date(request.args.get("start"), date.today() - timedelta(days=6))
@@ -615,6 +637,7 @@ def punch_add():
         note = request.form.get("note", "").strip() or "Manual entry"
         note += f" (by {g.user['username']})"
         if sync.record_punch(db, emp["employee_no"], when.strftime(att.FMT), source="manual", note=note):
+            _audit("punch.add", f"#{emp['employee_no']} {when:%Y-%m-%d %H:%M} - {note}")
             flash("Manual punch added.", "success")
         else:
             flash("A punch already exists at that time.", "warning")
@@ -626,7 +649,10 @@ def punch_add():
 @admin_required
 def punch_delete(punch_id):
     db = get_db()
+    row = db.execute("SELECT * FROM punches WHERE id = ?", (punch_id,)).fetchone()
     db.execute("DELETE FROM punches WHERE id = ?", (punch_id,))
+    if row:
+        _audit("punch.delete", f"#{row['employee_no']} {row['punch_time']} ({row['source']})")
     db.commit()
     flash("Punch deleted.", "success")
     return redirect(request.referrer or url_for("main.punches"))
@@ -634,7 +660,7 @@ def punch_delete(punch_id):
 
 # ------------------------------------------------------------- reports ----
 @bp.route("/reports/monthly")
-@login_required
+@staff_required
 def report_monthly():
     db = get_db()
     start, end = _month_range(request.args.get("month"))
@@ -643,6 +669,11 @@ def report_monthly():
     rows = att.compute(db, start, end, att.report_employees(db, start, end, department_id=dept))
     days = list(att.daterange(start, end))
     export = request.args.get("export")
+    if export == "xlsx":
+        from .excel import monthly_workbook
+        data = monthly_workbook(rows, days, start.strftime("%B %Y"), dbmod.get_setting(db, "company_name"))
+        return Response(data, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        headers={"Content-Disposition": f"attachment; filename=attendance-{start:%Y-%m}.xlsx"})
     if export == "muster":
         header = ["Employee No", "Name", "Department"] + [d.strftime("%d") for d in days] + \
                  ["Present", "Absent", "Half Day", "Leave", "Holiday", "Weekly Off", "Late", "Payable"]
@@ -653,10 +684,10 @@ def report_monthly():
     if export == "summary":
         return _csv(f"summary-{start:%Y-%m}.csv",
                     ["Employee No", "Name", "Department", "Present", "Absent", "Half Day", "Missing Punch",
-                     "Leave", "Holiday", "Weekly Off", "Late Days", "Early Exits", "Work Hours", "OT Hours",
-                     "Payable Days"],
+                     "Leave", "Unpaid Leave", "Holiday", "Weekly Off", "Late Days", "Early Exits", "Work Hours",
+                     "OT Hours", "Payable Days"],
                     [[e["employee_no"], e["name"], e["department"] or "", s.present, s.absent, s.half_day,
-                      s.missing_punch, s.leave, s.holiday, s.weekly_off, s.late, s.early,
+                      s.missing_punch, s.leave, s.unpaid_leave, s.holiday, s.weekly_off, s.late, s.early,
                       att.fmt_minutes(s.work_minutes), att.fmt_minutes(s.ot_minutes), s.payable]
                      for e, _, s in rows])
     if export == "detail":
@@ -678,7 +709,7 @@ def report_monthly():
 
 # -------------------------------------------------------------- leaves ----
 @bp.route("/leaves", methods=["GET", "POST"])
-@login_required
+@staff_required
 def leaves():
     db = get_db()
     if request.method == "POST":
@@ -688,36 +719,175 @@ def leaves():
         emp_id = _int(request.form.get("employee_id"))
         start = att.parse_date(request.form.get("start_date"))
         end = att.parse_date(request.form.get("end_date")) or start
-        if not emp_id or not start or end < start or not db.execute(
-                "SELECT 1 FROM employees WHERE id = ?", (emp_id,)).fetchone():
+        leave_type = request.form.get("leave_type") or "Casual"
+        half_day = 1 if request.form.get("half_day") else 0
+        emp = db.execute("SELECT * FROM employees WHERE id = ?", (emp_id,)).fetchone() if emp_id else None
+        if not emp or not start or end < start:
             flash("Select an employee and a valid date range.", "error")
+        elif leave_type not in {t["name"] for t in lv.leave_types(db)}:
+            flash("Choose a leave type from the list.", "error")
+        elif half_day and start != end:
+            flash("A half-day leave must be for a single date.", "error")
         else:
-            db.execute("INSERT INTO leaves (employee_id, start_date, end_date, leave_type, half_day, reason) "
-                       "VALUES (?, ?, ?, ?, ?, ?)",
-                       (emp_id, start.isoformat(), end.isoformat(), request.form.get("leave_type") or "Casual",
-                        1 if request.form.get("half_day") else 0, request.form.get("reason", "").strip() or None))
+            problem = lv.check_balance(db, emp_id, leave_type, start, end, half_day)
+            db.execute("INSERT INTO leaves (employee_id, start_date, end_date, leave_type, half_day, reason, status, "
+                       "requested_by, decided_by, decided_at) VALUES (?, ?, ?, ?, ?, ?, 'approved', ?, ?, "
+                       "datetime('now','localtime'))",
+                       (emp_id, start.isoformat(), end.isoformat(), leave_type, half_day,
+                        request.form.get("reason", "").strip() or None, g.user["username"], g.user["username"]))
+            _audit("leave.add", f"#{emp['employee_no']} {emp['name']}: {leave_type} {start} to {end}"
+                                f"{' (half day)' if half_day else ''}")
             db.commit()
-            flash("Leave recorded.", "success")
+            if problem:
+                flash(f"Leave recorded, but note: {problem}", "warning")
+            else:
+                flash("Leave recorded.", "success")
         return redirect(url_for("main.leaves"))
-    rows = db.execute("SELECT l.*, e.name, e.employee_no FROM leaves l JOIN employees e ON e.id = l.employee_id "
-                      "ORDER BY l.start_date DESC LIMIT 300").fetchall()
+    year = _int(request.args.get("year"), date.today().year)
+    status = request.args.get("status", "")
+    sql = ("SELECT l.*, e.name, e.employee_no FROM leaves l JOIN employees e ON e.id = l.employee_id "
+           "WHERE l.start_date <= ? AND l.end_date >= ?")
+    args = [f"{year}-12-31", f"{year}-01-01"]
+    if status in ("pending", "approved", "rejected"):
+        sql += " AND l.status = ?"
+        args.append(status)
+    rows = db.execute(sql + " ORDER BY l.start_date DESC LIMIT 500", args).fetchall()
     employees = db.execute("SELECT id, employee_no, name FROM employees WHERE active = 1 ORDER BY name").fetchall()
-    return render_template("leaves.html", rows=rows, employees=employees, today=date.today())
+    types = lv.leave_types(db)
+    return render_template("leaves.html", rows=rows, employees=employees, today=date.today(), types=types,
+                           year=year, status=status, balances=lv.balances(db, year, [e["id"] for e in employees]))
 
 
 @bp.route("/leaves/<int:leave_id>/delete", methods=["POST"])
 @admin_required
 def leave_delete(leave_id):
     db = get_db()
+    row = db.execute("SELECT l.*, e.employee_no FROM leaves l JOIN employees e ON e.id = l.employee_id "
+                     "WHERE l.id = ?", (leave_id,)).fetchone()
     db.execute("DELETE FROM leaves WHERE id = ?", (leave_id,))
+    if row:
+        _audit("leave.delete", f"#{row['employee_no']} {row['leave_type']} {row['start_date']} to {row['end_date']}")
     db.commit()
     flash("Leave removed.", "success")
+    return redirect(request.referrer or url_for("main.leaves"))
+
+
+@bp.route("/leave-types", methods=["POST"])
+@admin_required
+def leave_type_save():
+    db = get_db()
+    name = request.form.get("name", "").strip()[:40]
+    quota = _float(request.form.get("yearly_quota"), -1)
+    paid = 1 if request.form.get("paid") else 0
+    if not name or not 0 <= quota <= 366:
+        flash("Enter a leave type name and a yearly quota from 0 (no limit) to 366.", "error")
+    else:
+        db.execute("INSERT INTO leave_types (name, yearly_quota, paid) VALUES (?, ?, ?) "
+                   "ON CONFLICT(name) DO UPDATE SET yearly_quota = excluded.yearly_quota, paid = excluded.paid",
+                   (name, quota, paid))
+        _audit("leave_type.save", f"{name}: quota {quota:g}, {'paid' if paid else 'unpaid'}")
+        db.commit()
+        flash(f"Leave type {name} saved.", "success")
     return redirect(url_for("main.leaves"))
+
+
+@bp.route("/leave-types/<int:type_id>/delete", methods=["POST"])
+@admin_required
+def leave_type_delete(type_id):
+    db = get_db()
+    t = db.execute("SELECT * FROM leave_types WHERE id = ?", (type_id,)).fetchone()
+    if t and db.execute("SELECT 1 FROM leaves WHERE leave_type = ? LIMIT 1", (t["name"],)).fetchone():
+        flash(f"{t['name']} is used by existing leave records and cannot be deleted. Set its quota instead.", "error")
+    elif t:
+        db.execute("DELETE FROM leave_types WHERE id = ?", (type_id,))
+        _audit("leave_type.delete", t["name"])
+        db.commit()
+        flash(f"Leave type {t['name']} deleted.", "success")
+    return redirect(url_for("main.leaves"))
+
+
+# ------------------------------------------------------------ requests ----
+@bp.route("/requests")
+@staff_required
+def requests_page():
+    db = get_db()
+    leave_rows = db.execute("SELECT l.*, e.name, e.employee_no FROM leaves l JOIN employees e ON e.id = l.employee_id "
+                            "WHERE l.status = 'pending' ORDER BY l.start_date").fetchall()
+    punch_rows = db.execute("SELECT r.*, e.name, e.employee_no FROM punch_requests r "
+                            "JOIN employees e ON e.id = r.employee_id WHERE r.status = 'pending' "
+                            "ORDER BY r.punch_time").fetchall()
+    recent = db.execute(
+        "SELECT 'Leave' AS kind, e.name, l.leave_type || ' ' || l.start_date || CASE WHEN l.end_date != l.start_date "
+        "THEN ' to ' || l.end_date ELSE '' END AS what, l.status, l.decided_by, l.decided_at, l.decision_note "
+        "FROM leaves l JOIN employees e ON e.id = l.employee_id WHERE l.requested_by IS NOT NULL "
+        "AND l.status != 'pending' AND l.decided_at IS NOT NULL AND l.requested_by != l.decided_by "
+        "UNION ALL SELECT 'Correction', e.name, r.punch_time, r.status, r.decided_by, r.decided_at, r.decision_note "
+        "FROM punch_requests r JOIN employees e ON e.id = r.employee_id WHERE r.status != 'pending' "
+        "ORDER BY decided_at DESC LIMIT 20").fetchall()
+    year = date.today().year
+    ids = sorted({r["employee_id"] for r in leave_rows})
+    return render_template("requests.html", leave_rows=leave_rows, punch_rows=punch_rows, recent=recent,
+                           balances=lv.balances(db, year, ids), year=year)
+
+
+@bp.route("/requests/<kind>/<int:req_id>/<decision>", methods=["POST"])
+@admin_required
+def request_decide(kind, req_id, decision):
+    db = get_db()
+    if decision not in ("approve", "reject") or kind not in ("leave", "punch"):
+        flash("Unknown request action.", "error")
+        return redirect(url_for("main.requests_page"))
+    status = "approved" if decision == "approve" else "rejected"
+    note = request.form.get("note", "").strip()[:500] or None
+    who = g.user["username"]
+    if kind == "leave":
+        row = db.execute("SELECT l.*, e.employee_no, e.name FROM leaves l JOIN employees e ON e.id = l.employee_id "
+                         "WHERE l.id = ? AND l.status = 'pending'", (req_id,)).fetchone()
+        if not row:
+            flash("That request was already handled.", "warning")
+            return redirect(url_for("main.requests_page"))
+        db.execute("UPDATE leaves SET status = ?, decided_by = ?, decided_at = datetime('now','localtime'), "
+                   "decision_note = ? WHERE id = ?", (status, who, note, req_id))
+        _audit(f"leave.{status}", f"#{row['employee_no']} {row['name']}: {row['leave_type']} "
+                                  f"{row['start_date']} to {row['end_date']}")
+    else:
+        row = db.execute("SELECT r.*, e.employee_no, e.name FROM punch_requests r "
+                         "JOIN employees e ON e.id = r.employee_id WHERE r.id = ? AND r.status = 'pending'",
+                         (req_id,)).fetchone()
+        if not row:
+            flash("That request was already handled.", "warning")
+            return redirect(url_for("main.requests_page"))
+        db.execute("UPDATE punch_requests SET status = ?, decided_by = ?, decided_at = datetime('now','localtime'), "
+                   "decision_note = ? WHERE id = ?", (status, who, note, req_id))
+        if status == "approved":
+            sync.record_punch(db, row["employee_no"], row["punch_time"], source="manual",
+                              note=f"Correction request: {row['reason'] or ''} (approved by {who})")
+        _audit(f"punch.{status}", f"#{row['employee_no']} {row['name']}: {row['punch_time']}")
+    db.commit()
+    flash(f"Request {status}.", "success")
+    return redirect(url_for("main.requests_page"))
+
+
+# ---------------------------------------------------------------- audit ---
+@bp.route("/audit")
+@admin_required
+def audit_log():
+    db = get_db()
+    q = request.args.get("q", "").strip()
+    sql, args = "SELECT * FROM audit_log", []
+    if q:
+        sql += " WHERE username LIKE ? OR action LIKE ? OR details LIKE ?"
+        args = [f"%{q}%"] * 3
+    rows = db.execute(sql + " ORDER BY id DESC LIMIT 500", args).fetchall()
+    if request.args.get("export"):
+        return _csv("audit-log.csv", ["Time", "User", "Action", "Details"],
+                    [[r["at"], r["username"] or "", r["action"], r["details"] or ""] for r in rows])
+    return render_template("audit.html", rows=rows, q=q)
 
 
 # ---------------------------------------------------- holidays & setup ----
 @bp.route("/holidays", methods=["GET", "POST"])
-@login_required
+@staff_required
 def holidays():
     db = get_db()
     if request.method == "POST":
@@ -731,6 +901,7 @@ def holidays():
         else:
             db.execute("INSERT INTO holidays (date, name) VALUES (?, ?) "
                        "ON CONFLICT(date) DO UPDATE SET name = excluded.name", (day.isoformat(), name))
+            _audit("holiday.save", f"{day} {name}")
             db.commit()
             flash("Holiday saved.", "success")
         return redirect(url_for("main.holidays"))
@@ -743,13 +914,16 @@ def holidays():
 @admin_required
 def holiday_delete(hid):
     db = get_db()
+    row = db.execute("SELECT * FROM holidays WHERE id = ?", (hid,)).fetchone()
     db.execute("DELETE FROM holidays WHERE id = ?", (hid,))
+    if row:
+        _audit("holiday.delete", f"{row['date']} {row['name']}")
     db.commit()
     return redirect(url_for("main.holidays"))
 
 
 @bp.route("/shifts", methods=["GET", "POST"])
-@login_required
+@staff_required
 def shifts():
     db = get_db()
     if request.method == "POST":
@@ -785,6 +959,7 @@ def shifts():
                 else:
                     db.execute(f"INSERT INTO shifts ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
                                [data[c] for c in cols])
+                _audit("shift.save", f"{data['name']} {data['start_time']}-{data['end_time']}")
                 db.commit()
                 flash("Shift saved.", "success")
             except sqlite3.IntegrityError:
@@ -801,7 +976,10 @@ def shifts():
 @admin_required
 def shift_delete(sid):
     db = get_db()
+    row = db.execute("SELECT name FROM shifts WHERE id = ?", (sid,)).fetchone()
     db.execute("DELETE FROM shifts WHERE id = ?", (sid,))
+    if row:
+        _audit("shift.delete", row["name"])
     db.commit()
     flash("Shift deleted; its employees now have no shift (default 09:00-18:00 is used).", "success")
     return redirect(url_for("main.shifts"))
@@ -814,6 +992,7 @@ def department_add():
     name = request.form.get("name", "").strip()
     if name:
         db.execute("INSERT OR IGNORE INTO departments (name) VALUES (?)", (name,))
+        _audit("department.add", name)
         db.commit()
     return redirect(url_for("main.settings"))
 
@@ -823,6 +1002,7 @@ def department_add():
 def department_delete(did):
     db = get_db()
     db.execute("DELETE FROM departments WHERE id = ?", (did,))
+    _audit("department.delete", str(did))
     db.commit()
     return redirect(url_for("main.settings"))
 
@@ -840,6 +1020,7 @@ def bulk_shift():
             db.execute(f"UPDATE employees SET shift_id = ? WHERE id IN ({marks})", [shift_id, *ids])
         if dept_id:
             db.execute(f"UPDATE employees SET department_id = ? WHERE id IN ({marks})", [dept_id, *ids])
+        _audit("employee.bulk", f"{len(ids)} employees: shift={shift_id or '-'} department={dept_id or '-'}")
         db.commit()
         flash(f"Updated {len(ids)} employees.", "success")
     else:
@@ -853,6 +1034,33 @@ NUMERIC_SETTINGS = {
     "window_before_hours": (0, 12, "Hours before shift"),
     "ot_min_minutes": (0, 600, "Minimum overtime"),
 }
+
+
+ROLES = {"admin": "Admin", "viewer": "Viewer (read-only)", "employee": "Employee (self-service)"}
+
+
+def _admin_count(db, excluding=None):
+    return db.execute("SELECT COUNT(*) FROM users WHERE role = 'admin' AND id != ?", (excluding or 0,)).fetchone()[0]
+
+
+def _create_user(db, username, password, role, employee_id=None):
+    """Validate and create a login; returns an error message or None."""
+    if not username or len(username) > 40 or len(password) < 6:
+        return "Username (max 40 characters) and a password of at least 6 characters are required."
+    if role not in ROLES:
+        return "Choose a role."
+    if role == "employee":
+        if not employee_id or not db.execute("SELECT 1 FROM employees WHERE id = ?", (employee_id,)).fetchone():
+            return "Choose the employee this self-service login belongs to."
+        if db.execute("SELECT 1 FROM users WHERE employee_id = ?", (employee_id,)).fetchone():
+            return "That employee already has a login."
+    if db.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
+        return "That username is taken."
+    db.execute("INSERT INTO users (username, password_hash, role, employee_id) VALUES (?, ?, ?, ?)",
+               (username, generate_password_hash(password), role, employee_id if role == "employee" else None))
+    _audit("user.create", f"{username} ({role})")
+    db.commit()
+    return None
 
 
 @bp.route("/settings", methods=["GET", "POST"])
@@ -870,6 +1078,7 @@ def settings():
                 flash("New password must be at least 6 characters and match the confirmation.", "error")
             else:
                 db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(new), user["id"]))
+                _audit("user.password", "changed own password")
                 db.commit()
                 flash("Password changed.", "success")
         elif g.user["role"] != "admin":
@@ -894,41 +1103,107 @@ def settings():
                         if key in NUMERIC_SETTINGS:
                             value = "%g" % float(value)
                         dbmod.set_setting(db, key, value)
+                _audit("settings.general", "saved")
                 db.commit()
                 flash("Settings saved.", "success")
-        elif form == "user":
-            username = request.form.get("username", "").strip()
-            password = request.form.get("password", "")
-            role = "viewer" if request.form.get("role") == "viewer" else "admin"
-            if not username or len(password) < 6:
-                flash("Username and a password of at least 6 characters are required.", "error")
-            elif db.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
-                flash("That username is taken.", "error")
+        elif form == "email":
+            port = _int(request.form.get("smtp_port"))
+            hm = att.parse_hm(request.form.get("report_time"))
+            recipients = [r.strip() for r in request.form.get("report_recipients", "").split(",") if r.strip()]
+            if request.form.get("smtp_host") and not (port and 0 < port < 65536):
+                flash("Enter a valid SMTP port (usually 587, or 465 for SSL).", "error")
+            elif not hm:
+                flash("Enter the daily report time as HH:MM.", "error")
+            elif any("@" not in r for r in recipients):
+                flash("Recipients must be email addresses separated by commas.", "error")
             else:
-                db.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-                           (username, generate_password_hash(password), role))
+                for key in ("smtp_host", "smtp_user", "smtp_from"):
+                    dbmod.set_setting(db, key, request.form.get(key, "").strip())
+                dbmod.set_setting(db, "smtp_port", str(port or 587))
+                dbmod.set_setting(db, "smtp_security", request.form.get("smtp_security") if
+                                  request.form.get("smtp_security") in ("starttls", "ssl", "none") else "starttls")
+                dbmod.set_setting(db, "report_recipients", ", ".join(recipients))
+                dbmod.set_setting(db, "report_time", "%02d:%02d" % hm)
+                if request.form.get("smtp_password"):  # blank keeps the saved password
+                    dbmod.set_setting(db, "smtp_password", request.form["smtp_password"])
+                _audit("settings.email", f"server {request.form.get('smtp_host', '')}, {len(recipients)} recipients")
                 db.commit()
-                flash(f"User {username} created.", "success")
-        elif form == "regen_bridge":
-            dbmod.set_setting(db, "bridge_token", secrets.token_urlsafe(24))
-            db.commit()
-            flash("New bridge token created. Update bridge.ini on the bridge PC, then restart the bridge.", "warning")
-        elif form == "delete_user":
+                flash("Email settings saved.", "success")
+        elif form == "send_report":
+            from . import notify
+            try:
+                sent_to = notify.send_daily_report(db, force=True)
+                flash(f"Daily summary sent to {', '.join(sent_to)}.", "success")
+            except notify.NotifyError as exc:
+                flash(str(exc), "error")
+        elif form == "user":
+            error = _create_user(db, request.form.get("username", "").strip(), request.form.get("password", ""),
+                                 request.form.get("role"), _int(request.form.get("employee_id")))
+            flash(error or "User created.", "error" if error else "success")
+        elif form in ("set_role", "reset_password", "delete_user"):
             uid = _int(request.form.get("user_id"))
-            if uid == g.user["id"]:
+            target = db.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+            if not target:
+                flash("User not found.", "error")
+            elif form == "reset_password":
+                new = request.form.get("new_password", "")
+                if len(new) < 6:
+                    flash("The new password must be at least 6 characters.", "error")
+                else:
+                    db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(new), uid))
+                    db.execute("DELETE FROM login_attempts WHERE username = ?", (target["username"],))
+                    _audit("user.reset_password", target["username"])
+                    db.commit()
+                    flash(f"Password for {target['username']} reset.", "success")
+            elif target["role"] == "admin" and _admin_count(db, excluding=uid) == 0:
+                flash("At least one administrator must remain.", "error")
+            elif form == "set_role":
+                role = request.form.get("role")
+                if role not in ("admin", "viewer"):
+                    flash("Choose Admin or Viewer.", "error")
+                elif target["role"] == "employee":
+                    flash("Employee logins stay linked to their employee; delete and recreate to change.", "error")
+                else:
+                    db.execute("UPDATE users SET role = ? WHERE id = ?", (role, uid))
+                    _audit("user.role", f"{target['username']} -> {role}")
+                    db.commit()
+                    flash(f"{target['username']} is now {ROLES[role]}.", "success")
+            elif uid == g.user["id"]:
                 flash("You cannot delete yourself.", "error")
             else:
                 db.execute("DELETE FROM users WHERE id = ?", (uid,))
+                _audit("user.delete", target["username"])
                 db.commit()
                 flash("User deleted.", "success")
+        elif form == "regen_bridge":
+            dbmod.set_setting(db, "bridge_token", secrets.token_urlsafe(24))
+            _audit("settings.bridge_token", "regenerated")
+            db.commit()
+            flash("New bridge token created. Update bridge.ini on the bridge PC, then restart the bridge.", "warning")
         return redirect(url_for("main.settings"))
-    return render_template("settings.html", settings=dbmod.get_settings(db),
+    return render_template("settings.html", settings=dbmod.get_settings(db), roles=ROLES,
                            schema_version=db.execute("PRAGMA user_version").fetchone()[0],
                            server_url=request.host_url.rstrip("/"),
-                           users=db.execute("SELECT id, username, role, created_at FROM users ORDER BY username"),
+                           users=db.execute("SELECT u.id, u.username, u.role, u.created_at, e.name AS employee_name, "
+                                            "e.employee_no FROM users u LEFT JOIN employees e ON e.id = u.employee_id "
+                                            "ORDER BY u.role, u.username").fetchall(),
+                           employees_without_login=db.execute(
+                               "SELECT id, employee_no, name FROM employees WHERE active = 1 AND id NOT IN "
+                               "(SELECT employee_id FROM users WHERE employee_id IS NOT NULL) ORDER BY name").fetchall(),
                            departments=db.execute(
                                "SELECT d.*, (SELECT COUNT(*) FROM employees e WHERE e.department_id = d.id) AS n "
                                "FROM departments d ORDER BY name").fetchall())
+
+
+@bp.route("/employees/<int:emp_id>/login", methods=["POST"])
+@admin_required
+def employee_login_create(emp_id):
+    db = get_db()
+    error = _create_user(db, request.form.get("username", "").strip(), request.form.get("password", ""),
+                         "employee", emp_id)
+    flash(error or "Self-service login created. Give the employee their username and password.",
+          "error" if error else "success")
+    return redirect(url_for("main.employee_detail", emp_id=emp_id))
 
 
 @bp.route("/settings/backup")

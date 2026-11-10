@@ -12,18 +12,27 @@
     <div class="brand">{{ company_name }}<small>Attendance · Hikvision DS-K1T320</small></div>
     {% set ep = request.endpoint %}
     <nav class="nav">
+      {% if user and user.role == 'employee' %}
+      <a href="{{ url_for('portal.my_attendance') }}" class="{{ 'active' if ep == 'portal.my_attendance' }}">My Attendance</a>
+      <a href="{{ url_for('portal.my_leave') }}" class="{{ 'active' if ep == 'portal.my_leave' }}">My Leave</a>
+      <a href="{{ url_for('portal.my_corrections') }}" class="{{ 'active' if ep == 'portal.my_corrections' }}">Punch Corrections</a>
+      <a href="{{ url_for('main.settings') }}" class="{{ 'active' if ep == 'main.settings' }}">Change Password</a>
+      {% else %}
       <a href="{{ url_for('main.dashboard') }}" class="{{ 'active' if ep == 'main.dashboard' }}">Dashboard</a>
       <div class="sep">Attendance</div>
       <a href="{{ url_for('main.attendance_daily') }}" class="{{ 'active' if ep == 'main.attendance_daily' }}">Daily Attendance</a>
       <a href="{{ url_for('main.report_monthly') }}" class="{{ 'active' if ep == 'main.report_monthly' }}">Monthly Reports</a>
       <a href="{{ url_for('main.punches') }}" class="{{ 'active' if ep == 'main.punches' }}">Punch Log</a>
       <a href="{{ url_for('main.leaves') }}" class="{{ 'active' if ep == 'main.leaves' }}">Leaves</a>
+      <a href="{{ url_for('main.requests_page') }}" class="{{ 'active' if ep == 'main.requests_page' }}">Requests{% if pending_requests %} <span class="count">{{ pending_requests }}</span>{% endif %}</a>
       <div class="sep">Setup</div>
       <a href="{{ url_for('main.employees') }}" class="{{ 'active' if ep and ep.startswith('main.employee') }}">Employees</a>
       <a href="{{ url_for('main.shifts') }}" class="{{ 'active' if ep == 'main.shifts' }}">Shifts</a>
       <a href="{{ url_for('main.holidays') }}" class="{{ 'active' if ep == 'main.holidays' }}">Holidays</a>
       <a href="{{ url_for('main.devices') }}" class="{{ 'active' if ep and ep.startswith('main.device') }}">Devices</a>
       <a href="{{ url_for('main.settings') }}" class="{{ 'active' if ep == 'main.settings' }}">Settings</a>
+      {% if user and user.role == 'admin' %}<a href="{{ url_for('main.audit_log') }}" class="{{ 'active' if ep == 'main.audit_log' }}">Audit Log</a>{% endif %}
+      {% endif %}
     </nav>
     {% if user %}
     <div class="side-foot">

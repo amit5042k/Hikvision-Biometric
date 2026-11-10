@@ -1,0 +1,23 @@
+{% from "_macros.html" import badge %}
+<div class="stats">
+  <div class="stat ok"><div class="num">{{ summary.present }}</div><div class="lbl">Present</div></div>
+  <div class="stat bad"><div class="num">{{ summary.absent }}</div><div class="lbl">Absent</div></div>
+  <div class="stat info"><div class="num">{{ summary.leave }}</div><div class="lbl">Leave{% if summary.unpaid_leave %} ({{ summary.unpaid_leave }} unpaid){% endif %}</div></div>
+  <div class="stat warn"><div class="num">{{ summary.late }}</div><div class="lbl">Late days</div></div>
+  <div class="stat"><div class="num">{{ summary.work_minutes|hm or '0:00' }}</div><div class="lbl">Work hours</div></div>
+  <div class="stat"><div class="num">{{ summary.ot_minutes|hm or '0:00' }}</div><div class="lbl">Overtime</div></div>
+  <div class="stat"><div class="num">{{ summary.payable }}</div><div class="lbl">Payable days</div></div>
+</div>
+<div class="calendar">
+  {% for w in weekdays %}<div class="hd">{{ w }}</div>{% endfor %}
+  {% for _ in range(pad) %}<div></div>{% endfor %}
+  {% for d in days %}
+    <div class="cell {{ 'today' if d.date == d.date.today() }}">
+      <div class="d">{{ d.date.day }} {{ badge(d) }}</div>
+      {% if d.first_in %}<div>{{ d.first_in.strftime('%H:%M') }}{% if d.last_out %} – {{ d.last_out.strftime('%H:%M') }}{% endif %}</div>{% endif %}
+      {% if d.work_minutes %}<div class="muted">{{ d.work_minutes|hm }} h</div>{% endif %}
+      {% if d.late_minutes %}<div class="late">Late {{ d.late_minutes }}m</div>{% endif %}
+      {% if d.remarks and not d.first_in %}<div class="muted">{{ d.remarks|join(', ') }}</div>{% endif %}
+    </div>
+  {% endfor %}
+</div>

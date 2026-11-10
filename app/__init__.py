@@ -1,9 +1,10 @@
 import os
-from datetime import datetime
 import secrets
+from datetime import datetime
 from functools import wraps
 from pathlib import Path
 
+import click
 from flask import Flask, abort, flash, g, redirect, request, session, url_for
 
 from . import db as dbmod
@@ -36,9 +37,10 @@ def create_app(test_config=None):
     dbmod.init_db(app.config["DATABASE"], app.config["BACKUP_DIR"])
     app.teardown_appcontext(dbmod.close_db)
 
-    from . import bridge_api, routes
+    from . import bridge_api, portal, routes
     app.register_blueprint(routes.bp)
     app.register_blueprint(bridge_api.bp)
+    app.register_blueprint(portal.bp)
 
     app.jinja_env.filters["hm"] = fmt_minutes
     app.jinja_env.filters["dayname"] = lambda iso: datetime.strptime(iso, "%Y-%m-%d").strftime("%A")
@@ -49,8 +51,15 @@ def create_app(test_config=None):
     def load_user_and_check_csrf():
         g.user = None
         if "user_id" in session:
-            g.user = dbmod.get_db().execute("SELECT id, username, role FROM users WHERE id = ?",
+            g.user = dbmod.get_db().execute("SELECT id, username, role, employee_id FROM users WHERE id = ?",
                                             (session["user_id"],)).fetchone()
+            if g.user is None:
+                session.pop("user_id", None)  # the account was deleted
+        # Employee logins may only use their own self-service pages.
+        if g.user is not None and g.user["role"] == "employee" and request.endpoint not in EMPLOYEE_ENDPOINTS:
+            if request.method == "POST":
+                abort(403)
+            return redirect(url_for("portal.my_attendance"))
         # /api/ endpoints are called by devices and the bridge agent and use tokens instead
         if request.method == "POST" and not request.path.startswith("/api/"):
             expected = session.get("csrf_token")
@@ -59,11 +68,25 @@ def create_app(test_config=None):
 
     @app.context_processor
     def inject_globals():
-        company = dbmod.get_setting(dbmod.get_db(), "company_name")
-        return {"company_name": company, "user": g.get("user")}
+        db = dbmod.get_db()
+        company = dbmod.get_setting(db, "company_name")
+        user = g.get("user")
+        pending = 0
+        if user is not None and user["role"] in ("admin", "viewer"):
+            pending = (db.execute("SELECT COUNT(*) FROM leaves WHERE status = 'pending'").fetchone()[0] +
+                       db.execute("SELECT COUNT(*) FROM punch_requests WHERE status = 'pending'").fetchone()[0])
+        return {"company_name": company, "user": user, "pending_requests": pending}
 
     register_cli(app)
     return app
+
+
+# Endpoints an employee (self-service) login can reach; everything else is staff-only.
+EMPLOYEE_ENDPOINTS = {
+    "static", "main.login", "main.logout", "main.settings",
+    "portal.my_attendance", "portal.my_leave", "portal.my_leave_cancel",
+    "portal.my_corrections", "portal.my_correction_cancel",
+}
 
 
 def register_cli(app):
@@ -78,6 +101,17 @@ def register_cli(app):
                 print(device["name"], sync_events(db, device))
             except HikvisionError as exc:
                 print(device["name"], "FAILED:", exc)
+
+    @app.cli.command("send-daily-report")
+    @click.option("--force", is_flag=True, help="send now even if already sent today")
+    def send_daily_report_command(force):
+        """Email the daily attendance summary if it is due (run from cron every 15 minutes)."""
+        from .notify import NotifyError, send_daily_report
+        try:
+            sent = send_daily_report(dbmod.get_db(), force=force)
+            print("Sent to " + ", ".join(sent) if sent else "Not due yet (or already sent today).")
+        except NotifyError as exc:
+            print("FAILED:", exc)
 
     @app.cli.command("backup")
     def backup_command():
@@ -116,6 +150,17 @@ def login_required(view):
     def wrapped(*args, **kwargs):
         if g.user is None:
             return redirect(url_for("main.login", next=request.full_path))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def staff_required(view):
+    """Logged in as admin or viewer (not an employee self-service login)."""
+    @wraps(view)
+    @login_required
+    def wrapped(*args, **kwargs):
+        if g.user["role"] not in ("admin", "viewer"):
+            abort(403)
         return view(*args, **kwargs)
     return wrapped
 

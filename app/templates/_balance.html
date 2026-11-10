@@ -1,0 +1,12 @@
+<table>
+  <thead><tr><th>Type</th><th class="num">Quota</th><th class="num">Used</th><th class="num">Pending</th><th class="num">Left</th></tr></thead>
+  <tbody>
+  {% for name, b in balance.items() if b.quota or b.used or b.pending %}
+    <tr><td>{{ name }}{% if not b.paid %} <span class="muted small">(unpaid)</span>{% endif %}</td>
+      <td class="num">{{ '%g'|format(b.quota) if b.quota else 'No limit' }}</td>
+      <td class="num">{{ '%g'|format(b.used) }}</td>
+      <td class="num">{{ '%g'|format(b.pending) if b.pending else '' }}</td>
+      <td class="num {{ 'bal-low' if b.left is not none and b.left <= 0 }}">{{ '%g'|format(b.left) if b.left is not none else '—' }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>

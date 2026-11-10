@@ -37,7 +37,10 @@ class Day:
     early_minutes: int = 0
     ot_minutes: int = 0
     leave: float = 0          # 1 = full day of leave, 0.5 = half day
+    leave_type: str | None = None
     remarks: list = field(default_factory=list)
+
+    leave_paid = True
 
     @property
     def is_late(self):
@@ -55,6 +58,7 @@ class Summary:
     half_day: int = 0
     missing_punch: int = 0
     leave: float = 0
+    unpaid_leave: float = 0
     holiday: int = 0
     weekly_off: int = 0
     late: int = 0
@@ -64,7 +68,7 @@ class Summary:
 
     @property
     def payable(self):
-        return self.present + self.leave + self.holiday + self.weekly_off
+        return self.present + self.leave - self.unpaid_leave + self.holiday + self.weekly_off
 
 
 def daterange(start, end):
@@ -107,7 +111,8 @@ def _minutes(td):
     return int(td.total_seconds() // 60)
 
 
-LEAVE_QUERY = "SELECT * FROM leaves WHERE start_date <= ? AND end_date >= ?"
+# only approved leave affects attendance; pending requests do not
+LEAVE_QUERY = "SELECT * FROM leaves WHERE status = 'approved' AND start_date <= ? AND end_date >= ?"
 
 
 def load_employees(db, department_id=None, employee_id=None, include_inactive=False):
@@ -160,6 +165,7 @@ def compute(db, start, end, employees=None, now=None):
     leaves = {}
     for r in db.execute(LEAVE_QUERY, (end.isoformat(), start.isoformat())):
         leaves.setdefault(r["employee_id"], []).append(r)
+    unpaid = {r["name"] for r in db.execute("SELECT name FROM leave_types WHERE paid = 0")}
 
     lo = datetime.combine(start, datetime.min.time()) - timedelta(days=1)
     hi = datetime.combine(end, datetime.min.time()) + timedelta(days=2)
@@ -177,6 +183,8 @@ def compute(db, start, end, employees=None, now=None):
         emp_leaves = leaves.get(emp["id"], [])
         days = [_compute_day(emp, d, times, holidays, emp_leaves, before, ot_min, now)
                 for d in daterange(start, end)]
+        for d in days:
+            d.leave_paid = d.leave_type not in unpaid
         out.append((emp, days, summarize(days)))
     return out
 
@@ -212,6 +220,7 @@ def _compute_day(emp, d, times, holidays, emp_leaves, before, ot_min, now):
         elif leave:
             day.status = "L"
             day.leave = 0.5 if leave["half_day"] else 1
+            day.leave_type = leave["leave_type"]
             day.remarks.append(f"{leave['leave_type']} leave" + (" (half day)" if leave["half_day"] else ""))
         elif now < shift_end:
             day.status = "-"  # shift not over yet (also across midnight), not absent yet
@@ -269,9 +278,11 @@ def _compute_day(emp, d, times, holidays, emp_leaves, before, ot_min, now):
             if day.status != "P":  # worked part of the day, half day on leave
                 day.status = "HD"
                 day.leave = 0.5
+                day.leave_type = leave["leave_type"]
         elif day.status in ("A", "HD"):  # dropped in briefly on a full day of leave
             day.status = "L"
             day.leave = 1
+            day.leave_type = leave["leave_type"]
     return day
 
 
@@ -287,10 +298,14 @@ def summarize(days):
             s.present += 0.5
             s.half_day += 1
             s.leave += d.leave
+            if not d.leave_paid:
+                s.unpaid_leave += d.leave
         elif d.status == "A":
             s.absent += 1
         elif d.status == "L":
             s.leave += d.leave
+            if not d.leave_paid:
+                s.unpaid_leave += d.leave
             s.absent += 1 - d.leave  # the other half of a half-day leave with no punches
         elif d.status == "H":
             s.holiday += 1
