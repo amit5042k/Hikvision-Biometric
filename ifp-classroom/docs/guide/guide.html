@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>IFP Classroom Attendance — Setup Guide &amp; User Manual</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  :root { --ink: #1d2433; --muted: #5d6576; --line: #dfe3ea; --accent: #c8102e; --soft: #f4f6fa; --info: #1f5fb4; --ok: #1f8f4e; --warn: #a86a00; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font: 10.5pt/1.5 "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: var(--ink); margin: 0; }
+  h1 { font-size: 22pt; margin: 0 0 6pt; line-height: 1.2; }
+  h2 { font-size: 16pt; margin: 0 0 8pt; padding-bottom: 4pt; border-bottom: 2px solid var(--accent); break-after: avoid; }
+  h3 { font-size: 12pt; margin: 14pt 0 4pt; break-after: avoid; }
+  p { margin: 0 0 7pt; }
+  ul, ol { margin: 0 0 8pt; padding-left: 18pt; }
+  li { margin-bottom: 2.5pt; }
+  code { font: 9pt ui-monospace, Consolas, monospace; background: var(--soft); padding: 0 3pt; border-radius: 3px; }
+  b.ui { font-weight: 600; background: #eef1f6; border: 1px solid #d5dae3; border-radius: 4px; padding: 0 4pt; white-space: nowrap; }
+  .chapter { break-before: page; }
+  .muted { color: var(--muted); }
+  .small { font-size: 9pt; }
+  figure { margin: 8pt 0 12pt; break-inside: avoid; }
+  figure img { max-width: 100%; max-height: 100mm; width: auto; border: 1px solid var(--line); border-radius: 6px; display: block; margin: 0 auto; }
+  figure.half img { max-width: 70%; }
+  figure.tall img { max-height: 150mm; }
+  figcaption { font-size: 8.5pt; color: var(--muted); margin-top: 3pt; text-align: center; }
+  table { width: 100%; border-collapse: collapse; margin: 4pt 0 10pt; font-size: 9.5pt; break-inside: auto; }
+  th, td { border: 1px solid var(--line); padding: 4pt 6pt; text-align: left; vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  tr { break-inside: avoid; }
+  .note, .tip, .warn { border-left: 4px solid var(--info); background: #eef4fc; padding: 6pt 9pt; border-radius: 4px; margin: 6pt 0 10pt; break-inside: avoid; }
+  .tip { border-color: var(--ok); background: #ecf7f0; }
+  .warn { border-color: var(--warn); background: #fff6e3; }
+  .note b:first-child, .tip b:first-child, .warn b:first-child { display: block; margin-bottom: 1pt; }
+  .steps { counter-reset: s; list-style: none; padding-left: 0; }
+  .steps > li { counter-increment: s; position: relative; padding-left: 24pt; margin-bottom: 5pt; }
+  .steps > li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 16pt; height: 16pt; border-radius: 50%; background: var(--accent); color: #fff; font-size: 8.5pt; font-weight: 700; text-align: center; line-height: 16pt; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt; }
+  /* cover */
+  .cover { height: 255mm; display: flex; flex-direction: column; justify-content: space-between; }
+  .cover .band { background: #161b26; color: #fff; padding: 26pt 24pt; border-radius: 10px; }
+  .cover .band h1 { font-size: 30pt; color: #fff; }
+  .cover .band p { color: #c9cfdb; font-size: 12pt; margin: 0; }
+  .cover .kicker { color: #f3b6c0; letter-spacing: .12em; font-size: 9pt; text-transform: uppercase; margin-bottom: 10pt; }
+  .cover .meta { font-size: 9.5pt; color: var(--muted); }
+  /* contents */
+  .toc { columns: 2; column-gap: 20pt; font-size: 10pt; }
+  .toc a { color: var(--ink); text-decoration: none; display: block; padding: 2pt 0; border-bottom: 1px dotted var(--line); break-inside: avoid; }
+  .toc a span { color: var(--accent); font-weight: 700; display: inline-block; width: 18pt; }
+  /* illustrations */
+  .illus { border: 1px solid var(--line); border-radius: 6px; padding: 10pt; background: #fafbfd; break-inside: avoid; }
+  .tag { display: inline-block; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4pt; margin-bottom: 6pt; background: #fff; }
+  .phone { width: 100%; max-width: 300pt; margin: 0 auto; background: #fff; border: 8px solid #222; border-radius: 16px; padding: 12pt 14pt; font-family: Roboto, Arial, sans-serif; }
+  .phone .t { font-size: 15pt; font-weight: 700; margin-bottom: 4pt; }
+  .phone .l { font-weight: 700; font-size: 9pt; margin-top: 8pt; }
+  .phone .f { border-bottom: 2px solid #1f8f9e; padding: 3pt 0; font-size: 10pt; color: #333; min-height: 16pt; }
+  .phone .f.ph { color: #999; }
+  .phone .sw { display: flex; justify-content: space-between; align-items: center; font-size: 9pt; margin-top: 8pt; }
+  .phone .sw i { width: 26pt; height: 13pt; border-radius: 7pt; background: #1f8f9e; position: relative; flex-shrink: 0; margin-left: 8pt; }
+  .phone .sw i::after { content: ""; position: absolute; right: 1pt; top: 1pt; width: 11pt; height: 11pt; border-radius: 50%; background: #fff; }
+  .phone .btn { display: inline-block; background: #e0e0e0; padding: 5pt 10pt; font-size: 9pt; font-weight: 600; margin-top: 10pt; border-radius: 3px; text-transform: uppercase; }
+  .phone .ok { color: #1f8f4e; font-size: 9pt; margin-top: 6pt; }
+  .console { background: #0c0c0c; color: #ddd; font: 8.5pt/1.45 Consolas, ui-monospace, monospace; padding: 10pt 12pt; border-radius: 4px; white-space: pre; }
+  .diagram svg { width: 100%; height: auto; }
+  .page-break { break-before: page; }
+  #c20 table { font-size: 8.5pt; margin-bottom: 6pt; }
+  #c20 th, #c20 td { padding: 2.5pt 5pt; }
+  #c20 h3 { margin-top: 9pt; }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ cover -->
+<section class="cover">
+  <div class="band">
+    <div class="kicker">Setup guide &amp; user manual</div>
+    <h1>IFP Classroom Attendance</h1>
+    <p>Face-recognition attendance and classroom entry / exit records<br>using the camera on every classroom interactive flat panel</p>
+  </div>
+  <div class="diagram">
+    <svg viewBox="0 0 640 230" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+      <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5d6576"/></marker></defs>
+      <rect x="10" y="20" width="180" height="190" rx="10" fill="#f4f6fa" stroke="#dfe3ea"/>
+      <text x="100" y="44" text-anchor="middle" font-size="13" font-weight="700" fill="#1d2433">Classroom panels</text>
+      <text x="100" y="62" text-anchor="middle" font-size="10" fill="#5d6576">Android · IFP Classroom app</text>
+      <g fill="#fff" stroke="#c8102e" stroke-width="1.5"><rect x="30" y="76" width="140" height="34" rx="6"/><rect x="30" y="118" width="140" height="34" rx="6"/><rect x="30" y="160" width="140" height="34" rx="6"/></g>
+      <g font-size="11" fill="#1d2433" text-anchor="middle"><text x="100" y="97">Class 6-A · login class6a</text><text x="100" y="139">Class 7-A · login class7a</text><text x="100" y="181">Class 8-A · login class8a</text></g>
+      <rect x="240" y="55" width="170" height="120" rx="10" fill="#161b26"/>
+      <text x="325" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">Server</text>
+      <text x="325" y="102" text-anchor="middle" font-size="10" fill="#c9cfdb">your Windows PC</text>
+      <text x="325" y="124" text-anchor="middle" font-size="10" fill="#c9cfdb">database · registers</text>
+      <text x="325" y="139" text-anchor="middle" font-size="10" fill="#c9cfdb">analytics · Excel</text>
+      <text x="325" y="160" text-anchor="middle" font-size="10" fill="#f3b6c0">http://PC-IP:8000</text>
+      <rect x="460" y="20" width="170" height="190" rx="10" fill="#f4f6fa" stroke="#dfe3ea"/>
+      <text x="545" y="44" text-anchor="middle" font-size="13" font-weight="700" fill="#1d2433">Browsers</text>
+      <g font-size="10.5" fill="#1d2433"><text x="476" y="78">Admin (you): everything</text><text x="476" y="108">Principal (viewer):</text><text x="476" y="122">all classes, read-only</text><text x="476" y="152">Class teacher (class</text><text x="476" y="166">login): own class only</text></g>
+      <g stroke="#5d6576" stroke-width="1.5" fill="none"><path d="M190 100 L238 100" marker-end="url(#a)"/><path d="M238 130 L192 130" marker-end="url(#a)"/><path d="M458 115 L412 115" marker-end="url(#a)"/></g>
+      <g font-size="9" fill="#5d6576" text-anchor="middle"><text x="214" y="93">seen</text><text x="214" y="146">faces</text><text x="435" y="108">view</text></g>
+    </svg>
+  </div>
+  <div class="meta">
+    <p><b>Server:</b> Windows PC (school IT administrator) &nbsp;·&nbsp; <b>Clients:</b> IFP Classroom Android app on every classroom panel &nbsp;·&nbsp; <b>Viewing:</b> any browser on the school network</p>
+    <p>Software version: server with panel app 1.2. Screenshots use a fictional school ("Green Valley Public School") and sample names. Faces in camera images are blurred.</p>
+    <p>Face recognition uses the open-source face-api library (MIT licence), included with the software, so recognition works without internet access.</p>
+  </div>
+</section>
+
+<!-- ============================================================ contents -->
+<section class="chapter">
+  <h2>Contents</h2>
+  <div class="toc">
+    <a href="#c1"><span>1</span>How the system works</a>
+    <a href="#c2"><span>2</span>What you need</a>
+    <a href="#c3"><span>3</span>Install the server on your Windows PC</a>
+    <a href="#c4"><span>4</span>First sign-in and the main screen</a>
+    <a href="#c5"><span>5</span>Classrooms and classroom logins</a>
+    <a href="#c6"><span>6</span>Periods, holidays and recognition settings</a>
+    <a href="#c7"><span>7</span>Students and teachers</a>
+    <a href="#c8"><span>8</span>Face photos (enrolment)</a>
+    <a href="#c9"><span>9</span>Install the app on each panel</a>
+    <a href="#c10"><span>10</span>The camera screen on the panel</a>
+    <a href="#c11"><span>11</span>Class register</a>
+    <a href="#c12"><span>12</span>Entry / exit log and person page</a>
+    <a href="#c13"><span>13</span>Monthly register</a>
+    <a href="#c14"><span>14</span>Analytics</a>
+    <a href="#c15"><span>15</span>Users, roles and the class teacher's view</a>
+    <a href="#c16"><span>16</span>Settings, audit log, backup and updates</a>
+    <a href="#c17"><span>17</span>Troubleshooting</a>
+    <a href="#c18"><span>18</span>Privacy, security and limits</a>
+    <a href="#c19"><span>19</span>Go-live checklist</a>
+    <a href="#c20"><span>A</span>Reference: CSV format, settings, rules</a>
+  </div>
+
+  <h3>Quick start (for the IT administrator)</h3>
+  <ol class="steps">
+    <li>On your Windows PC, install Python, then run <code>windows\install_windows_server.bat</code> as administrator (chapter 3).</li>
+    <li>Open <code>http://&lt;PC-IP&gt;:8000</code>, sign in as <b>admin / admin</b> and change the password (chapter 4).</li>
+    <li>Add every classroom and give each its <b>own login</b> (chapter 5). Add periods, holidays and weekly offs (chapter 6).</li>
+    <li>Import students and teachers from a CSV and add face photos (chapters 7–8).</li>
+    <li>On every panel, open <code>http://&lt;PC-IP&gt;:8000/app</code>, install the app and sign in with that classroom's login (chapter 9).</li>
+    <li>Check the registers and analytics from your PC (chapters 11–14). Give class teachers their classroom login and the principal a viewer login (chapter 15).</li>
+  </ol>
+</section>
+
+<!-- ============================================================ 1 -->
+<section class="chapter" id="c1">
+  <h2>1. How the system works</h2>
+  <p><b>IFP Classroom Attendance</b> uses the camera on each classroom's interactive flat panel (IFP) to recognise students and teachers by face. It marks attendance and records when each person <b>enters</b> and <b>leaves</b> the classroom. Everything is stored on one <b>server</b>, your Windows PC, where all reports and analysis are available.</p>
+  <ul>
+    <li><b>Server: your Windows PC.</b> It holds the database: classrooms, people, face data and entry/exit records. It produces the registers, the analytics and the Excel/CSV downloads.</li>
+    <li><b>Clients: the IFP Classroom Android app</b> on every classroom panel. The app recognises faces <i>on the panel</i> and sends only "person X was seen at time T". No video is sent or recorded.</li>
+    <li><b>One login per classroom, same server.</b> Each classroom has its own username and password, e.g. <code>class8a</code>. The panel app signs in with it, and the class teacher can use it in a browser to see <i>only that class</i>.</li>
+    <li><b>Viewing:</b> any PC, laptop or phone on the school network can open the server in a browser.</li>
+  </ul>
+  <h3>Key terms</h3>
+  <table>
+    <tr><th style="width:26%">Term</th><th>Meaning</th></tr>
+    <tr><td>Sighting</td><td>One "person seen in this classroom at this time" record sent by a panel. A person in view is recorded about every 30 seconds.</td></tr>
+    <tr><td>Entry</td><td>The first time a person is seen in a classroom, or the first sighting after they were away.</td></tr>
+    <tr><td>Exit</td><td>The last time a person was seen, once they have been out of view for the classroom's <i>exit after unseen</i> time (default 10 minutes). If they come back later, a new entry starts.</td></tr>
+    <tr><td>In class now</td><td>Seen recently, within the exit time, so no exit has been recorded yet.</td></tr>
+    <tr><td>Present / Absent</td><td><b>Class register:</b> present if seen in that classroom that day. <b>Monthly register and Analytics:</b> present if seen in <i>any</i> classroom that day. Absent if not seen on a school day.</td></tr>
+    <tr><td>H / WO</td><td>Holiday / weekly off. Nobody is marked absent on these days.</td></tr>
+    <tr><td>Classroom login</td><td>The username and password of one classroom. Used by its panel app and its class teacher.</td></tr>
+    <tr><td>Kiosk link</td><td>A secret web address for a classroom's camera screen. The app gets it automatically when it signs in; you rarely need it yourself.</td></tr>
+  </table>
+  <div class="note"><b>Attendance is always worked out from the raw sightings.</b> Changing a holiday, a weekly off, a period, a classroom's exit time or a person's class updates every report straight away. Nothing needs to be "recalculated".</div>
+</section>
+
+<!-- ============================================================ 2 -->
+<section class="chapter" id="c2">
+  <h2>2. What you need</h2>
+  <table>
+    <tr><th style="width:24%">Item</th><th>Requirement</th></tr>
+    <tr><td>Server PC</td><td>Windows 10 or 11, 4 GB RAM or more, about 2 GB free disk. It must stay switched on during school hours; set Sleep to <i>Never</i> when plugged in. Give it a <b>fixed IP address</b> (DHCP reservation in the router, or a static IP).</td></tr>
+    <tr><td>Software on the server</td><td>Python 3.10 or newer from python.org, installed with <b>Add Python to PATH</b> ticked. The installer downloads the rest the first time, so internet is needed once.</td></tr>
+    <tr><td>Classroom panels</td><td>Android 7 or newer IFPs with a built-in or USB camera. No OPS PC module is needed.</td></tr>
+    <tr><td>Network</td><td>Panels and the server PC on the same school network (LAN or Wi-Fi), with TCP port <b>8000</b> reachable on the server. The installer opens it in Windows Firewall.</td></tr>
+    <tr><td>Photos</td><td>One or more clear, front-facing photos of each student and teacher. ID-card photos are fine.</td></tr>
+    <tr><td>Consent</td><td>Parent/guardian consent for students' biometric data (see chapter 18).</td></tr>
+  </table>
+  <h3>What is in the <code>ifp-classroom</code> folder</h3>
+  <table>
+    <tr><th style="width:34%">Folder / file</th><th>Purpose</th></tr>
+    <tr><td><code>windows\</code></td><td>Installer, start-up script, daily backup and uninstaller for the Windows server.</td></tr>
+    <tr><td><code>classroom_app\</code></td><td>The server program, including the panel app file <code>static\app\ifp-classroom.apk</code>.</td></tr>
+    <tr><td><code>data\</code> (created by the installer)</td><td><b>All your data:</b> database, backups and logs. Back this folder up.</td></tr>
+    <tr><td><code>android\</code></td><td>Source of the panel app, only needed to rebuild it.</td></tr>
+    <tr><td><code>docs\</code></td><td>This guide and a text version (<code>SETUP.md</code>).</td></tr>
+  </table>
+</section>
+
+<!-- ============================================================ 3 -->
+<section class="chapter" id="c3">
+  <h2>3. Install the server on your Windows PC</h2>
+  <ol class="steps">
+    <li>Install <b>Python 3.10 or newer</b> from <code>python.org/downloads</code>. On the first installer screen, tick <b class="ui">Add Python to PATH</b>.</li>
+    <li>Copy the <code>ifp-classroom</code> folder to the PC, e.g. <code>C:\IFPClassroom</code>. Keep it in a fixed place; the start-up task points to it.</li>
+    <li>Open the <code>windows</code> folder, right-click <b>install_windows_server.bat</b> and choose <b class="ui">Run as administrator</b>.</li>
+    <li>Wait for the four steps to finish. The window then shows the address of the server.</li>
+  </ol>
+  <div class="illus">
+    <span class="tag">Illustration</span>
+    <div class="console">[1/4] Installing packages...
+[2/4] Creating the start-up task...
+[3/4] Opening port 8000 in Windows Firewall...
+[4/4] Scheduling the daily backup...
+
+Done. The server is starting and will start by itself every time this PC is switched on.
+
+Open one of these addresses in a browser (this PC, or any PC on the school network):
+    http://192.168.1.10:8000
+    (on this PC you can also use http://localhost:8000)
+
+First sign-in: admin / admin  - change the password straight away under Settings.
+Data and backups are kept in: C:\IFPClassroom\data</div>
+  </div>
+  <h3>What the installer sets up</h3>
+  <table>
+    <tr><th style="width:32%">Item</th><th>Details</th></tr>
+    <tr><td>Start-up task <i>IFP Classroom Server</i></td><td>Starts the server whenever Windows starts, even before anyone signs in. It restarts the server automatically if it ever stops.</td></tr>
+    <tr><td>Firewall rule <i>IFP Classroom Server</i></td><td>Allows incoming TCP port 8000 on private and domain networks.</td></tr>
+    <tr><td>Task <i>IFP Classroom Backup</i></td><td>Copies the database to <code>data\backups</code> every day at 17:30 and keeps the latest 30 copies.</td></tr>
+    <tr><td><code>data\server.log</code></td><td>Server messages, useful when something goes wrong.</td></tr>
+  </table>
+  <div class="warn"><b>If panels cannot connect later</b>Make sure the PC's network profile is <b>Private</b>, not Public (Windows Settings → Network → your connection). If another firewall or antivirus product is installed, allow port 8000 there too.</div>
+  <div class="tip"><b>Running the installer again is safe.</b> It updates the program and keeps all data. Use it after copying in a newer version of the software.</div>
+</section>
+
+<!-- ============================================================ 4 -->
+<section class="chapter" id="c4">
+  <h2>4. First sign-in and the main screen</h2>
+  <p>On the server PC open <code>http://localhost:8000</code>. On any other PC, open <code>http://&lt;PC-IP&gt;:8000</code>, e.g. <code>http://192.168.1.10:8000</code>. Sign in with <b>admin</b> / <b>admin</b>.</p>
+  <figure class="half"><img src="img/login.png"><figcaption>Sign-in page</figcaption></figure>
+  <div class="warn"><b>Change the default password straight away</b>Go to <b class="ui">Settings</b> → <i>Change your password</i>. Also set your school's name under <i>School</i>; it appears on every page and in the Excel downloads.</div>
+  <h3>The menu</h3>
+  <table>
+    <tr><th style="width:26%">Menu item</th><th>What it is for</th><th style="width:16%">Chapter</th></tr>
+    <tr><td>Classrooms</td><td>Classrooms, their logins, panel status, periods and recognition settings</td><td>5, 6</td></tr>
+    <tr><td>Analytics</td><td>Attendance trends and summaries for any period</td><td>14</td></tr>
+    <tr><td>Class Register</td><td>Daily register for one classroom</td><td>11</td></tr>
+    <tr><td>Entry / Exit Log</td><td>Every entry and exit, with times</td><td>12</td></tr>
+    <tr><td>Monthly Register</td><td>Month grid of P / A / H / WO with totals and %</td><td>13</td></tr>
+    <tr><td>Students &amp; Teachers</td><td>People, CSV import/export, face photos</td><td>7, 8</td></tr>
+    <tr><td>Holidays</td><td>School holidays</td><td>6</td></tr>
+    <tr><td>Settings</td><td>School name, your password, users, backup</td><td>15, 16</td></tr>
+    <tr><td>Audit Log</td><td>Who changed what, and when (admin only)</td><td>16</td></tr>
+  </table>
+  <p class="muted small">The pages also work on phones and tablets: tap <b class="ui">☰ Menu</b> to open the menu.</p>
+</section>
+
+<!-- ============================================================ 5 -->
+<section class="chapter" id="c5">
+  <h2>5. Classrooms and classroom logins</h2>
+  <p>Open <b class="ui">Classrooms</b>. The top of the page shows the number of students and teachers and how many of them have face photos. The table below lists every classroom.</p>
+  <figure><img src="img/overview.png"><figcaption>Classrooms page: summary and the classrooms table</figcaption></figure>
+  <table>
+    <tr><th style="width:24%">Column</th><th>Meaning</th></tr>
+    <tr><td>Classroom</td><td>Click the name to open today's register for that room.</td></tr>
+    <tr><td>Class login</td><td>The room's username. <i>not set</i> (red) means the panel cannot sign in yet.</td></tr>
+    <tr><td>Panel</td><td><b>online</b>: the panel checked in during the last 10 minutes. <b>offline</b>: it has been silent longer. <b>never</b>: no panel has signed in yet. The time of the last check-in is shown.</td></tr>
+    <tr><td>In class now</td><td>People currently in the room.</td></tr>
+    <tr><td>Present today</td><td>Students of this home classroom seen today / total students of this room.</td></tr>
+    <tr><td>Exit after unseen</td><td>How long someone must be out of view before an exit is recorded.</td></tr>
+  </table>
+  <h3>Add a classroom</h3>
+  <p>Below the table, type a name (e.g. <i>Class 8-A</i>), set <i>Exit after unseen for</i> (normally 10 minutes) and click <b class="ui">Add classroom</b>.</p>
+  <h3>Give each classroom its own login</h3>
+  <p>Under <b>Manage classrooms</b>, click a classroom to open it:</p>
+  <figure><img src="img/overview-edit.png"><figcaption>Manage classrooms: name and exit time, the classroom login, and the kiosk link</figcaption></figure>
+  <ol class="steps">
+    <li>Type a <b>username</b> without spaces, e.g. <code>class8a</code>, and a <b>password</b> of at least 6 characters.</li>
+    <li>Click <b class="ui">Create login</b>. Note the username and password for the panel and the class teacher.</li>
+    <li>To change it later, type the new username and/or a new password and click <b class="ui">Update login</b>. Leaving the password empty keeps the old one.</li>
+  </ol>
+  <h3>Other actions for a classroom</h3>
+  <table>
+    <tr><th style="width:30%">Action</th><th>Effect</th></tr>
+    <tr><td>Name / Exit after unseen / Status → <b class="ui">Save</b></td><td>Rename the room, change its exit time, or <i>disable</i> it. A disabled room's panel stops recording.</td></tr>
+    <tr><td><b class="ui">Open kiosk</b></td><td>Opens the camera screen in a browser, for testing on a PC with a webcam.</td></tr>
+    <tr><td><b class="ui">New link (signs the panel out)</b></td><td>Replaces the room's secret kiosk link. The panel stops working until it signs in again. Use it if a login may have leaked, together with a new password.</td></tr>
+    <tr><td><b class="ui">Delete classroom</b></td><td>Deletes the room, its login and <b>all its entry/exit records</b>. It cannot be undone.</td></tr>
+  </table>
+  <div class="tip"><b>Choosing the exit time</b>10 minutes suits panels that watch the class all the time. If the panel only takes a roll call at the start of each period (see chapter 10), set it to the length of a period, e.g. 40 minutes. Otherwise students look as if they left mid-lesson.</div>
+</section>
+
+<!-- ============================================================ 6 -->
+<section class="chapter" id="c6">
+  <h2>6. Periods, holidays and recognition settings</h2>
+  <p>These are at the bottom of the <b class="ui">Classrooms</b> page; holidays have their own page.</p>
+  <figure><img src="img/overview-settings.png"><figcaption>Timetable periods and recognition settings</figcaption></figure>
+  <h3>Timetable periods (optional)</h3>
+  <p>Add each period with a name, start and end time, e.g. <i>P1 08:30–09:10</i>. With periods set:</p>
+  <ul>
+    <li>the Class Register shows <b>P</b>/<b>A</b> per period (present = seen during that period);</li>
+    <li>Analytics counts <b>late arrivals</b>: first seen after the first period's start plus the late grace.</li>
+  </ul>
+  <h3>Recognition settings</h3>
+  <table>
+    <tr><th style="width:30%">Setting</th><th>Meaning</th><th style="width:16%">Default</th></tr>
+    <tr><td>Match strictness</td><td>How similar a face must be to an enrolled photo, from 0.30 to 0.70. <b>Lower is stricter.</b> If people get mixed up, lower it (e.g. 0.45). If people are often not recognised, raise it (e.g. 0.55).</td><td>0.50</td></tr>
+    <tr><td>Face detector</td><td><b>Accurate</b> finds small and far-away faces. <b>Fast</b> suits slower panels. A panel switches itself to Fast if Accurate is too slow on it.</td><td>Accurate</td></tr>
+    <tr><td>Late after first period starts</td><td>Minutes of grace before an arrival counts as late (needs periods).</td><td>10</td></tr>
+    <tr><td>Flag students below</td><td>Attendance % under which a student is flagged on the Analytics page.</td><td>75%</td></tr>
+    <tr><td>School weekly off</td><td>Days with no school. Nobody is marked absent on them.</td><td>Sunday</td></tr>
+  </table>
+  <p class="small muted">Panels pick up changed settings within 5 minutes.</p>
+  <h3>Holidays</h3>
+  <p>Open <b class="ui">Holidays</b>, choose a date and name and click <b class="ui">Add holiday</b>. Use the year buttons to move between years. Holidays show as <b>H</b> in the registers.</p>
+  <figure><img src="img/holidays.png"><figcaption>Holidays page</figcaption></figure>
+</section>
+
+<!-- ============================================================ 7 -->
+<section class="chapter" id="c7">
+  <h2>7. Students and teachers</h2>
+  <p>Open <b class="ui">Students &amp; Teachers</b>. You can search by name or number and filter by role, class or home classroom. The <i>Face photos</i> column shows <span style="color:#c62828;font-weight:600">none</span> for people the panels cannot recognise yet.</p>
+  <figure><img src="img/people.png"><figcaption>Students &amp; Teachers list</figcaption></figure>
+  <h3>Add one person</h3>
+  <p>Click <b class="ui">+ Add person</b> and fill in the form:</p>
+  <table>
+    <tr><th style="width:28%">Field</th><th>Notes</th></tr>
+    <tr><td>Admission / staff number</td><td>Unique, e.g. <code>S1023</code> or <code>T014</code>. Bulk photo files are named after it.</td></tr>
+    <tr><td>Full name</td><td>Shown on the panel and in reports.</td></tr>
+    <tr><td>Role</td><td>Student or Teacher.</td></tr>
+    <tr><td>Class / section</td><td>e.g. <code>8-A</code>. Used for filters, the monthly register and class-wise analytics.</td></tr>
+    <tr><td>Home classroom</td><td>The room whose register lists this student, and which marks them absent when they are not seen. For teachers, leave it empty or choose their class-teacher room.</td></tr>
+    <tr><td>Active</td><td>Untick for people who have left. They stop being recognised and listed, but their past records stay. To remove everything, use <b class="ui">Delete</b> on their page.</td></tr>
+  </table>
+  <figure class="half"><img src="img/person-form.png"><figcaption>Add / edit person</figcaption></figure>
+  <h3>Import many people from a CSV file</h3>
+  <p>At the bottom of the list, choose a CSV file and click <b class="ui">Import</b>. Easiest: click <b class="ui">Export CSV</b> first to get a template, fill it in Excel, and save it as <i>CSV UTF-8</i>.</p>
+  <table>
+    <tr><th>Number</th><th>Name</th><th>Role</th><th>Class</th><th>Classroom</th><th>Active</th></tr>
+    <tr><td>S1023</td><td>Asha Verma</td><td>student</td><td>8-A</td><td>Class 8-A</td><td>1</td></tr>
+    <tr><td>T014</td><td>Mrs Lakshmi Iyer</td><td>teacher</td><td></td><td></td><td>1</td></tr>
+  </table>
+  <ul class="small">
+    <li><i>Classroom</i> must match a classroom name exactly; add classrooms first.</li>
+    <li>Existing numbers are <b>updated</b>, new numbers are added. Problems are listed after the import.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 8 -->
+<section class="chapter" id="c8">
+  <h2>8. Face photos (enrolment)</h2>
+  <p>A panel can only recognise people who have at least one face photo. The best results come from <b>2–5 photos</b> per person: front-facing, good light, no sunglasses or masks. Photos are converted to face data <b>in your browser</b>. The server keeps only the face data (128 numbers) and a small thumbnail, never the original photo.</p>
+  <h3>Option A: bulk upload (fastest for a whole school)</h3>
+  <ol class="steps">
+    <li>Name each photo file after the person's number, e.g. <code>S1023.jpg</code>. For extra photos of the same person add <code>_2</code>, <code>_3</code>…, e.g. <code>S1023_2.jpg</code>.</li>
+    <li>Make sure the people already exist (chapter 7).</li>
+    <li>Open <b class="ui">Students &amp; Teachers</b> → <b class="ui">Bulk face photos</b> → <b class="ui">Choose photos</b> and select all the files. Keep the page open until it says <i>Done</i>.</li>
+  </ol>
+  <figure><img src="img/enroll.png"><figcaption>Bulk face photos: each file is listed as added (✓) or with the reason it failed (✗)</figcaption></figure>
+  <h3>Option B: one person, from files or a camera</h3>
+  <p>Open the person's page. Use <b class="ui">Upload photos</b> to choose image files, or <b class="ui">Use camera</b> → <b class="ui">Capture face</b> to take photos with a webcam. Turn the head slightly between captures. Photos can be removed with <b class="ui">Remove</b>. Each person can have up to 10.</p>
+  <figure><img src="img/person-detail.png"><figcaption>Person page: face photos (blurred here), enrolment buttons and the day's entries and exits</figcaption></figure>
+  <div class="tip"><b>Tip: one photo from the panel itself</b>Recognition is best when one photo comes from the same camera. Sign in to the server in the panel's browser, open the person's page and use <b class="ui">Use camera</b>.</div>
+  <h3>Why a photo can be rejected</h3>
+  <table>
+    <tr><th style="width:40%">Message</th><th>What to do</th></tr>
+    <tr><td>no face found</td><td>Use a clearer, front-facing photo with the face fully visible.</td></tr>
+    <tr><td>more than one face in the photo</td><td>Crop the photo to one person.</td></tr>
+    <tr><td>the face is too small</td><td>Use a closer photo; the face should be at least about 60 pixels wide.</td></tr>
+    <tr><td>No student or teacher with number …</td><td>The file name does not match any number; check it, or add the person first.</td></tr>
+    <tr><td>already has 10 face photos</td><td>Remove an old photo first.</td></tr>
+  </table>
+</section>
+
+<!-- ============================================================ 9 -->
+<section class="chapter" id="c9">
+  <h2>9. Install the app on each panel</h2>
+  <p>Do this once on every classroom panel. It takes about 5 minutes per panel. Have that classroom's login ready (chapter 5).</p>
+  <ol class="steps">
+    <li>On the panel, open its web browser and go to <code>http://&lt;PC-IP&gt;:8000/app</code>, e.g. <code>http://192.168.1.10:8000/app</code>. Tap <b class="ui">Download the app</b>.</li>
+    <li>Open the downloaded file. If Android asks, allow <b>Install unknown apps</b> for the browser or file manager, then tap <b class="ui">Install</b>.</li>
+    <li>Open <b>IFP Classroom</b> and fill in the sign-in screen (below), then tap <b class="ui">Sign in and start</b>.</li>
+    <li>Tap <b class="ui">Allow</b> when Android asks for the camera. The camera screen appears and attendance starts.</li>
+  </ol>
+  <figure class="half" style="margin:4pt 0 8pt"><img src="img/app-download.png" style="max-height:70mm"><figcaption>The download page as seen on a panel</figcaption></figure>
+  <div class="two">
+    <div class="illus">
+      <span class="tag">Illustration of the app's sign-in screen</span>
+      <div class="phone">
+        <div class="t">IFP Classroom — sign in this panel</div>
+        <div class="small" style="color:#333">Use this classroom's own login. The administrator creates it on the server's Classrooms page.</div>
+        <div class="l">Server address</div><div class="f">192.168.1.10:8000</div>
+        <div class="l">Classroom username</div><div class="f">class8a</div>
+        <div class="l">Password</div><div class="f">••••••••</div>
+        <div class="sw">Open automatically when the panel is switched on<i></i></div>
+        <div class="sw">Keep recognising while another app is on screen<i></i></div>
+        <div class="l">Settings PIN (optional)</div><div class="f ph">e.g. 2468</div>
+        <div class="btn">Sign in and start</div>
+      </div>
+    </div>
+    <div>
+      <table>
+        <tr><th style="width:38%">Field / option</th><th>Notes</th></tr>
+        <tr><td>Server address</td><td>The server PC's address. <code>192.168.1.10</code> alone also works; port 8000 is assumed.</td></tr>
+        <tr><td>Classroom username / password</td><td>This room's login. An admin or viewer login is refused, so a panel is always linked to one classroom. The password is <b>not stored</b> on the panel.</td></tr>
+        <tr><td>Open automatically…</td><td>Opens the camera screen when the panel is switched on (see below).</td></tr>
+        <tr><td>Keep recognising…</td><td>Tries to keep the camera working while a teacher uses another app (see chapter 10).</td></tr>
+        <tr><td>Settings PIN</td><td>Asked for before anyone can change these settings from the camera screen. Recommended.</td></tr>
+      </table>
+    </div>
+  </div>
+  <h3>Automatic start when the panel is switched on</h3>
+  <ul>
+    <li>On <b>Android 10 and later</b>, tap <b class="ui">Allow "Display over other apps"</b> on the sign-in screen and switch it on for IFP Classroom. Android needs this before an app can open itself at power-on.</li>
+    <li>Many panels also have their own <i>Boot app</i> or <i>Start-up app</i> setting; choose IFP Classroom there if available.</li>
+  </ul>
+  <h3>Changing the classroom, signing in again, updating</h3>
+  <ul>
+    <li>On the camera screen, tap <b class="ui">⚙ App settings</b> and enter the PIN if one is set. Sign in with another classroom's login, or tap <b class="ui">Save options only</b> to change only the options.</li>
+    <li>If the screen says the panel is <i>no longer signed in</i>, the room's link was replaced or the room was removed. Sign in again.</li>
+    <li><b>To update the app</b>, download and install it again from <code>/app</code> over the old one. The panel stays signed in.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 10 -->
+<section class="chapter" id="c10">
+  <h2>10. The camera screen on the panel</h2>
+  <figure class="tall"><img src="img/kiosk.png"><figcaption>Camera screen of the panel app (camera image blurred for this guide)</figcaption></figure>
+  <table>
+    <tr><th style="width:28%">Part</th><th>What it shows / does</th></tr>
+    <tr><td>Top bar</td><td>Classroom name, date and time.</td></tr>
+    <tr><td>Boxes on faces</td><td><b>Green with a name</b>: recognised. <b>Yellow "Unknown"</b>: a face with no matching enrolment. A person is counted after being recognised twice within 10 seconds, which avoids one-frame mistakes.</td></tr>
+    <tr><td>In class now</td><td>Count and names of people in the room, teachers first, each with the time since they entered.</td></tr>
+    <tr><td>Entries &amp; exits</td><td>The latest entries and exits seen by this panel.</td></tr>
+    <tr><td>Status line</td><td>Recognising / faces in view / last sync time / records waiting to be sent. Problems such as the server being unreachable appear here in red.</td></tr>
+    <tr><td><b class="ui">Compact</b></td><td>A narrower layout for a small or side window.</td></tr>
+    <tr><td><b class="ui">Hide boxes</b></td><td>Hides the boxes and names on the camera image; recognition continues.</td></tr>
+    <tr><td>Camera list</td><td>Appears when the panel has more than one camera. The choice is remembered.</td></tr>
+    <tr><td><b class="ui">⚙ App settings</b></td><td>Opens the sign-in / options screen (PIN protected).</td></tr>
+  </table>
+  <div class="two">
+    <figure><img src="img/kiosk-compact.png"><figcaption>Compact layout, for split screen or a small window</figcaption></figure>
+    <div>
+      <h3>During lessons</h3>
+      <p>Android limits camera use by an app that is not on screen. With <i>Keep recognising while another app is on screen</i> switched on, the app asks Android to keep the camera running. A "Classroom attendance is running" notification shows while it does. How much Android allows depends on the panel's Android version and maker, so <b>test it on your panel model</b>:</p>
+      <ol class="small">
+        <li>Open the app and let it recognise you.</li>
+        <li>Switch to the whiteboard app for 5 minutes and walk in front of the camera.</li>
+        <li>On the server, check the <b>Entry / Exit Log</b>.</li>
+      </ol>
+      <p>If that doesn't work on your panel model:</p>
+      <ul class="small">
+        <li><b>Split screen / floating window</b>: keep the app (Compact) beside the lesson.</li>
+        <li><b>Roll call</b>: keep the app on screen for the first 2–3 minutes of each period. Set the room's exit time to the period length.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="note"><b>Network or server down?</b>The panel keeps recognising and stores its records, sending them when the connection returns; the status line shows how many are waiting. Times are corrected by the server, so a wrong panel clock does not matter.</div>
+</section>
+
+<!-- ============================================================ 11 -->
+<section class="chapter" id="c11">
+  <h2>11. Class register</h2>
+  <p>Open <b class="ui">Class Register</b>. Choose the classroom, the date and whether to show everyone, only students or only teachers. Use <b class="ui">← Prev</b> / <b class="ui">Next →</b> to move day by day.</p>
+  <figure><img src="img/register.png"><figcaption>Class register for one classroom and day</figcaption></figure>
+  <table>
+    <tr><th style="width:24%">Column</th><th>Meaning</th></tr>
+    <tr><td>Status</td><td><b>P</b> present (seen in this room that day) · <b>A</b> absent · <b>H</b> holiday · <b>WO</b> weekly off · – future day.</td></tr>
+    <tr><td>First entry</td><td>First time seen in this room that day.</td></tr>
+    <tr><td>Last exit</td><td>Last time seen, or <b>in class</b> if they are still in the room.</td></tr>
+    <tr><td>Time in class</td><td>Total time between each entry and its exit (hours:minutes).</td></tr>
+    <tr><td>Entries</td><td>How many times they came in. More than 1 means they left and returned.</td></tr>
+    <tr><td>P1, P2…</td><td>Per-period attendance (only when periods are set): P if seen during the period.</td></tr>
+  </table>
+  <p>The register lists the room's <b>home students</b> (absent ones included) plus <b>anyone else seen in the room</b>, such as subject teachers or students from another section.</p>
+  <p><b>Downloads:</b> <b class="ui">Excel</b> (formatted sheet), <b class="ui">CSV</b> and <b class="ui">Print</b> (print-friendly layout, or save as PDF from the print dialog).</p>
+</section>
+
+<!-- ============================================================ 12 -->
+<section class="chapter" id="c12">
+  <h2>12. Entry / exit log and person page</h2>
+  <p>Open <b class="ui">Entry / Exit Log</b> to see every entry and exit for a day, newest first. Filter by classroom or by a person's name or number. <b class="ui">Export CSV</b> downloads the list in time order.</p>
+  <figure><img src="img/movements.png"><figcaption>Entry / exit log</figcaption></figure>
+  <ul>
+    <li>Each <b>Exit</b> row shows how long the person stayed. <i>in class now</i> marks someone who has not left yet.</li>
+    <li>Click a name to open the <b>person page</b>. It shows their face photos and their entries and exits on any date (choose the date at the top right of that section).</li>
+  </ul>
+  <div class="note"><b>Why is an exit time shown later than expected?</b>An exit is only recorded once the person has been out of view for the room's exit time. The exit time itself is the <i>last moment they were seen</i>, not the moment the exit was recorded.</div>
+</section>
+
+<!-- ============================================================ 13 -->
+<section class="chapter" id="c13">
+  <h2>13. Monthly register</h2>
+  <p>Open <b class="ui">Monthly Register</b> and choose the month. You can filter by class or home classroom, and choose students, teachers or everyone. A day counts as <b>P</b> when the person was seen by <i>any</i> classroom panel that day.</p>
+  <figure><img src="img/monthly.png"><figcaption>Monthly register (October 2026, Class 8-A)</figcaption></figure>
+  <ul>
+    <li><b>P</b> present · <b>A</b> absent · <b>H</b> holiday · <b>WO</b> weekly off · blank: future day.</li>
+    <li><b>%</b> = days present ÷ working days so far (holidays and weekly offs are not counted).</li>
+    <li><b class="ui">Excel</b> gives a colour-coded sheet ready to print or file. <b class="ui">CSV</b> gives the same data for other software.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 14 -->
+<section class="chapter" id="c14">
+  <h2>14. Analytics</h2>
+  <p>Open <b class="ui">Analytics</b>. Choose a <b>period</b> (this week, this month, the last 30 days, the academic year from April, or custom dates) and optionally a <b>class</b>. Only school days are counted: holidays and weekly offs are left out.</p>
+  <figure><img src="img/analytics.png"><figcaption>Analytics: headline numbers and the daily attendance chart (hover a bar for details)</figcaption></figure>
+  <table>
+    <tr><th style="width:28%">Section</th><th>What it shows</th></tr>
+    <tr><td>Average attendance</td><td>Student-days present ÷ possible student-days in the period.</td></tr>
+    <tr><td>Below 75%</td><td>Number of students under the low-attendance threshold (chapter 6).</td></tr>
+    <tr><td>Late arrivals</td><td>Student-days first seen after the first period start plus the grace (needs periods).</td></tr>
+    <tr><td>Daily student attendance %</td><td>One bar per school day; the dashed line marks the threshold. Point at a bar to see the date and how many were present.</td></tr>
+    <tr><td>By class</td><td>Attendance %, number below threshold, and late arrivals per class. Click a class to analyse only that class.</td></tr>
+    <tr><td>Classrooms</td><td>Panel status, the days each room was in use, and the average number of people per day.</td></tr>
+    <tr><td>Students needing attention</td><td>Students sorted by attendance, lowest first, with absences and late arrivals; the lowest 50 are shown.</td></tr>
+    <tr><td>Teachers — time in classrooms</td><td>Days seen, total and average daily time each teacher spent in classrooms.</td></tr>
+  </table>
+  <figure><img src="img/analytics-2.png"><figcaption>Analytics: by class, classrooms, and students needing attention</figcaption></figure>
+  <p><b>Downloads:</b> <b class="ui">Students CSV</b> (every student's present/absent/late/%), <b class="ui">Daily CSV</b> (attendance % per day) and <b class="ui">Teachers CSV</b> (time in classrooms). Open them in Excel for your own charts and pivot tables.</p>
+</section>
+
+<!-- ============================================================ 15 -->
+<section class="chapter" id="c15">
+  <h2>15. Users, roles and the class teacher's view</h2>
+  <table>
+    <tr><th style="width:24%">Login type</th><th>Who</th><th>Sees</th><th style="width:22%">Can change</th><th style="width:20%">Created at</th></tr>
+    <tr><td><b>Admin</b></td><td>You (IT administrator)</td><td>Everything</td><td>Everything</td><td>Settings → Users</td></tr>
+    <tr><td><b>Viewer</b></td><td>Principal, office</td><td>Every class's reports and analytics</td><td>Only their own password</td><td>Settings → Users</td></tr>
+    <tr><td><b>Classroom</b></td><td>That room's panel app and its class teacher</td><td>Only that class: register, entry/exit log, monthly register, analytics, its own students' pages</td><td>Only its own password</td><td>Classrooms → Manage classrooms</td></tr>
+  </table>
+  <h3>What a class teacher sees</h3>
+  <p>When the class teacher signs in with the classroom login (e.g. <code>class8a</code>) in a browser, the menu shows only <i>My classroom</i> pages, limited to that room. Pages of other classes and all setup pages are not available.</p>
+  <figure class="half"><img src="img/class-view.png"><figcaption>Signed in with a classroom login: only that class's pages</figcaption></figure>
+  <h3>Managing users (Settings → Users &amp; logins)</h3>
+  <ul>
+    <li><b>Add user</b>: username, password (6+ characters) and role (Admin or Viewer).</li>
+    <li><b>Change role</b> (Admin ↔ Viewer), <b>Reset password</b>, <b>Delete</b>. At least one admin must remain, and you cannot delete yourself.</li>
+    <li>Classroom logins are listed with their room; change them on the Classrooms page.</li>
+    <li>After 5 wrong passwords, sign-in is blocked for 15 minutes. Panel sign-in is blocked after 10 wrong attempts in 15 minutes.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 16 -->
+<section class="chapter" id="c16">
+  <h2>16. Settings, audit log, backup and updates</h2>
+  <figure><img src="img/settings.png"><figcaption>Settings: school name, backup, password and users</figcaption></figure>
+  <h3>Audit log</h3>
+  <p><b class="ui">Audit Log</b> (admin only) records who did what and when: sign-ins, panel sign-ins, classrooms, logins, people, face photos, holidays and settings. Search it, or download it with <b class="ui">Export CSV</b>.</p>
+  <figure><img src="img/audit.png"><figcaption>Audit log</figcaption></figure>
+  <h3>Backup and restore</h3>
+  <ul>
+    <li><b>Automatic:</b> every day at 17:30 into <code>data\backups</code> (latest 30 kept), and always before an update changes the database.</li>
+    <li><b>Manual:</b> Settings → <b class="ui">Download backup</b>. Also copy the whole <code>data</code> folder to another disk or drive now and then.</li>
+    <li><b>Restore:</b> run <code>windows\uninstall_windows_server.bat</code> as administrator to stop the server. Copy the backup file over <code>data\classroom.db</code> (rename it to that name), then run the installer again.</li>
+  </ul>
+  <div class="warn"><b>Backups contain biometric data.</b> Store them as carefully as the server itself.</div>
+  <h3>Updating the software</h3>
+  <ol class="steps">
+    <li>Copy the new version of the <code>ifp-classroom</code> folder over the old one. Do <b>not</b> delete the <code>data</code> folder.</li>
+    <li>Run <code>windows\install_windows_server.bat</code> as administrator again. Database changes are applied automatically after a safety backup.</li>
+    <li>If the panel app changed, reinstall it on each panel from <code>/app</code>. It installs over the old one.</li>
+  </ol>
+  <h3>Moving to another PC or uninstalling</h3>
+  <p>Run <code>windows\uninstall_windows_server.bat</code> as administrator. It removes the start-up task, the backup task and the firewall rule; the <code>data</code> folder is kept. To move, copy the whole folder, including <code>data</code>, to the new PC and run the installer there. If the IP address changes, sign each panel in again with the new address.</p>
+  <h3>Forgotten admin password</h3>
+  <p>On the server PC, open a command prompt in the <code>ifp-classroom</code> folder and run:<br>
+  <code>set CLASSROOM_DATA_DIR=%cd%\data</code> then <code>.venv\Scripts\python -m flask --app classroom_app reset-admin</code>. The admin password becomes <b>admin</b>; change it straight away.</p>
+</section>
+
+<!-- ============================================================ 17 -->
+<section class="chapter" id="c17">
+  <h2>17. Troubleshooting</h2>
+  <table>
+    <tr><th style="width:34%">Problem</th><th>What to check / do</th></tr>
+    <tr><td>Browser cannot open <code>http://&lt;PC-IP&gt;:8000</code></td><td>Is the server PC on? Does <code>http://localhost:8000</code> work on the PC itself? If yes, the firewall or network profile is blocking others (chapter 3). If no, look at <code>data\server.log</code> and run the installer again.</td></tr>
+    <tr><td>Panel: "Cannot reach the server"</td><td>Is the address right (with <code>:8000</code>)? Is the panel on the school network rather than a guest Wi-Fi? Can the panel's browser open <code>http://&lt;PC-IP&gt;:8000/app</code>?</td></tr>
+    <tr><td>Panel: "Wrong username or password"</td><td>Check the classroom login on the Classrooms page. Set a new password with <b class="ui">Update login</b> if needed.</td></tr>
+    <tr><td>Panel: "Use the classroom's own login"</td><td>An admin or viewer login was used; use the classroom's login.</td></tr>
+    <tr><td>Panel: "no longer signed in"</td><td>The room's link was replaced (<b class="ui">New link</b>) or the room was deleted or disabled. Sign in again.</td></tr>
+    <tr><td>Panel shows <i>offline</i> on Classrooms</td><td>The app is closed, the panel is off, or the network is down. Open the app; the status line shows the reason.</td></tr>
+    <tr><td>Camera does not start</td><td>Allow the camera for IFP Classroom (Android Settings → Apps → IFP Classroom → Permissions). Close other apps using the camera, e.g. video calls. If the panel has two cameras, choose the right one in the camera list.</td></tr>
+    <tr><td>"No students or teachers have face photos yet"</td><td>Add face photos (chapter 8). The panel picks them up within 5 minutes.</td></tr>
+    <tr><td>Someone is not recognised</td><td>Add more photos, including one from the panel. Check lighting and distance (faces up to about 5–6 m). Raise <i>Match strictness</i> slightly (0.55).</td></tr>
+    <tr><td>Two people are confused</td><td>Lower <i>Match strictness</i> (0.45) and add more photos of both.</td></tr>
+    <tr><td>Students marked as leaving mid-lesson</td><td>The panel could not see them, e.g. while another app was full screen. Increase the room's exit time, or use split screen (chapter 10).</td></tr>
+    <tr><td>App does not open at power-on</td><td>Allow "Display over other apps" (chapter 9) and/or set the panel's own start-up app setting.</td></tr>
+    <tr><td>Recognition is slow on a panel</td><td>Set <i>Face detector</i> to Fast (chapter 6). The panel also does this by itself when it detects it is too slow.</td></tr>
+    <tr><td>Wrong attendance on a holiday</td><td>Add the date on the Holidays page; reports update immediately.</td></tr>
+  </table>
+</section>
+
+<!-- ============================================================ 18 -->
+<section class="chapter" id="c18">
+  <h2>18. Privacy, security and limits</h2>
+  <h3>Consent and transparency</h3>
+  <ul>
+    <li>The system processes <b>biometric data of children</b>. Under India's Digital Personal Data Protection Act 2023, the school must obtain verifiable consent from a parent or guardian before enrolling a student. It must also tell staff and parents what is collected, why, and for how long.</li>
+    <li>Do not enrol anyone without consent. Put up a notice in classrooms with panels.</li>
+  </ul>
+  <h3>What is stored, and where</h3>
+  <ul>
+    <li>Only on the server PC: face data (numbers), a small face thumbnail, and the times each person was seen in each classroom. No video or full photos are stored.</li>
+    <li>Delete students and staff who leave (their page → <b class="ui">Delete</b>); this removes their face data and records. Remember that older backups still contain them.</li>
+  </ul>
+  <h3>Security</h3>
+  <ul>
+    <li>Change the default admin password; use strong passwords for classroom logins.</li>
+    <li>A classroom login, and its kiosk link, gives access to that room's face data. If one may have leaked, set a new password and click <b class="ui">New link</b> for that room, then sign the panel in again.</li>
+    <li>Use the PIN in the panel app so students cannot change its settings.</li>
+    <li>Keep the server PC locked and updated; it holds all the data.</li>
+  </ul>
+  <h3>Limits</h3>
+  <ul>
+    <li><b>Not proof against spoofing:</b> a clear photo of a person held up to the camera can be recognised as that person. Treat the registers as attendance support, not a security control.</li>
+    <li>Recognition is very good but not perfect. Faces far away, turned away, poorly lit or covered may be missed. Check absences before acting on them.</li>
+    <li>Background recognition while other apps are open depends on the panel model (chapter 10).</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 19 -->
+<section class="chapter" id="c19">
+  <h2>19. Go-live checklist</h2>
+  <table>
+    <tr><th style="width:6%">✓</th><th>Task</th><th style="width:16%">Chapter</th></tr>
+    <tr><td>☐</td><td>Parent/guardian consent collected; notice displayed</td><td>18</td></tr>
+    <tr><td>☐</td><td>Server PC has a fixed IP, does not sleep, network profile is Private</td><td>2, 3</td></tr>
+    <tr><td>☐</td><td>Server installed; <code>http://&lt;PC-IP&gt;:8000</code> opens from another PC</td><td>3</td></tr>
+    <tr><td>☐</td><td>Admin password changed; school name set</td><td>4</td></tr>
+    <tr><td>☐</td><td>All classrooms added, each with its own login</td><td>5</td></tr>
+    <tr><td>☐</td><td>Weekly offs, holidays and timetable periods set</td><td>6</td></tr>
+    <tr><td>☐</td><td>Students and teachers imported with home classrooms</td><td>7</td></tr>
+    <tr><td>☐</td><td>Everyone has at least 2 face photos (no "none" on the people list)</td><td>8</td></tr>
+    <tr><td>☐</td><td>Pilot: one panel installed, signed in, recognising, and showing <i>online</i></td><td>9, 10</td></tr>
+    <tr><td>☐</td><td>"During lessons" test done on the panel model; exit times chosen accordingly</td><td>10</td></tr>
+    <tr><td>☐</td><td>Registers checked against a manual roll call for a few days</td><td>11–13</td></tr>
+    <tr><td>☐</td><td>App installed on all panels with a PIN; auto-start checked after a power cycle</td><td>9</td></tr>
+    <tr><td>☐</td><td>Class teachers given their classroom login; principal given a viewer login</td><td>15</td></tr>
+    <tr><td>☐</td><td>Backup checked: a file appears in <code>data\backups</code>; a copy is kept off the PC</td><td>16</td></tr>
+  </table>
+</section>
+
+<!-- ============================================================ A -->
+<section class="chapter" id="c20" style="font-size:9pt">
+  <h2>Appendix A. Reference</h2>
+  <h3>A.1 People CSV columns</h3>
+  <table>
+    <tr><th style="width:18%">Column</th><th style="width:14%">Required</th><th>Values</th></tr>
+    <tr><td>Number</td><td>yes</td><td>Admission or staff number; unique. Existing numbers are updated.</td></tr>
+    <tr><td>Name</td><td>yes</td><td>Full name.</td></tr>
+    <tr><td>Role</td><td>no</td><td><code>student</code> (default) or <code>teacher</code>.</td></tr>
+    <tr><td>Class</td><td>no</td><td>Class/section, e.g. <code>8-A</code>.</td></tr>
+    <tr><td>Classroom</td><td>no</td><td>Home classroom; must match a classroom name.</td></tr>
+    <tr><td>Active</td><td>no</td><td><code>1</code> (default) or <code>0</code> / <code>no</code> / <code>inactive</code>.</td></tr>
+  </table>
+  <h3>A.2 How attendance is calculated</h3>
+  <ul>
+    <li>A panel records a person after recognising them twice within 10 seconds, then at most once every 30 seconds while they stay in view.</li>
+    <li>Sightings of one person in one room are grouped into <b>visits</b>: a gap longer than the room's exit time starts a new visit. Visit start = entry, visit end = exit; time in class is the sum of the visits.</li>
+    <li><b>Class register:</b> present if seen in that room that day. <b>Period:</b> present if seen between the period's start and end.</li>
+    <li><b>Monthly register and Analytics:</b> present on a day if seen in any room that day. Working days exclude holidays, weekly offs and future days.</li>
+    <li><b>Late:</b> first seen that day after the first period's start plus the late grace.</li>
+  </ul>
+  <h3>A.3 Settings reference</h3>
+  <table>
+    <tr><th style="width:32%">Setting</th><th style="width:22%">Where</th><th>Range / default</th></tr>
+    <tr><td>Exit after unseen (per room)</td><td>Classrooms</td><td>1–240 minutes; 10</td></tr>
+    <tr><td>Match strictness</td><td>Classrooms</td><td>0.30–0.70; 0.50 (lower = stricter)</td></tr>
+    <tr><td>Face detector</td><td>Classrooms</td><td>Accurate / Fast; Accurate</td></tr>
+    <tr><td>Late grace</td><td>Classrooms</td><td>0–120 minutes; 10</td></tr>
+    <tr><td>Low-attendance threshold</td><td>Classrooms</td><td>1–100 %; 75</td></tr>
+    <tr><td>Weekly off</td><td>Classrooms</td><td>any days; Sunday</td></tr>
+    <tr><td>School name</td><td>Settings</td><td>text</td></tr>
+  </table>
+  <h3 style="margin-top:8pt">A.4 Addresses</h3>
+  <table>
+    <tr><th style="width:42%">Address</th><th>Purpose</th></tr>
+    <tr><td><code>http://&lt;PC-IP&gt;:8000</code></td><td>Server web pages (sign in)</td></tr>
+    <tr><td><code>http://&lt;PC-IP&gt;:8000/app</code></td><td>Panel app download page (no sign-in needed)</td></tr>
+    <tr><td><code>http://&lt;PC-IP&gt;:8000/kiosk/&lt;code&gt;</code></td><td>A classroom's camera screen in a browser (kiosk link)</td></tr>
+  </table>
+</section>
+
+</body>
+</html>

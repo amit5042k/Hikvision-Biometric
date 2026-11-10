@@ -37,7 +37,7 @@ with it, and the class teacher uses it to see only that class's reports.
 
 ## Install
 
-Full steps: **[docs/SETUP.md](docs/SETUP.md)**.
+**Illustrated setup guide and user manual (PDF, every feature explained): [docs/IFP-Classroom-Guide.pdf](docs/IFP-Classroom-Guide.pdf).** A shorter text version is in [docs/SETUP.md](docs/SETUP.md).
 
 1. **Server (Windows PC):**
    1. Install Python 3.10+ from python.org, ticking *Add Python to PATH*.
@@ -45,8 +45,8 @@ Full steps: **[docs/SETUP.md](docs/SETUP.md)**.
    3. Run `windows\install_windows_server.bat` as administrator.
    4. Open `http://<PC-IP>:8000` and sign in as **admin / admin**. Change the
       password.
-2. **Set up:** add classrooms and give each its own login (Classrooms → Edit →
-   Create login). Add students, teachers and face photos.
+2. **Set up:** add classrooms and give each its own login (Classrooms → Manage
+   classrooms → Create login). Add students, teachers and face photos.
 3. **Each panel:**
    1. Open `http://<PC-IP>:8000/app` in the panel's browser and install the app.
    2. Sign in with the server address and that classroom's login.
@@ -113,5 +113,6 @@ classroom_app/static/classroom/   kiosk and enrolment JavaScript (shared with th
 classroom_app/static/app/   the Android APK, offered to panels at /app
 android/                    Android client app (WebView + in-app secure origin, boot start, foreground service)
 windows/                    Windows server installer, start-up task, backup, uninstaller
+docs/guide/                 source of the PDF guide (guide.html + screenshots; rebuild with `node build_pdf.js`)
 run.py                      production entry point (waitress)
 ```

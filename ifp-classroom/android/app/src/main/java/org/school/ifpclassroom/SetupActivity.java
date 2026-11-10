@@ -63,7 +63,7 @@ public class SetupActivity extends Activity {
                     + (config.classroomName().isEmpty() ? "" : " (" + config.classroomName() + ")") + ".", 15));
         }
         box.addView(text("Use this classroom's own login. The administrator creates it on the server's "
-                + "Classrooms page (Edit → Create login).", 15));
+                + "Classrooms page (Manage classrooms → Create login).", 15));
 
         box.addView(label("Server address"));
         server = field("e.g. 192.168.1.10:8000", InputType.TYPE_TEXT_VARIATION_URI);

@@ -1,5 +1,7 @@
 # IFP Classroom Attendance — setup guide
 
+> The full illustrated **setup guide and user manual** is [IFP-Classroom-Guide.pdf](IFP-Classroom-Guide.pdf). This page is the short text version.
+
 ```
  Classroom panels (Android app)               Your Windows PC = the server               Any PC / phone
  ┌───────────────────────────────┐  "seen"    ┌──────────────────────────────┐  browser  ┌──────────────┐
@@ -60,7 +62,7 @@ allow port 8000.
 
 1. Open **Classrooms** and click **Add classroom** for every classroom, e.g.
    `Class 8-A`.
-2. For each classroom, click **Edit**, enter a username and password (e.g.
+2. For each classroom, open it under **Manage classrooms**, enter a username and password (e.g.
    `class8a`), and click **Create login**. Note them down for the panel and
    the class teacher. **Update login** changes the username, or the password
    when you type a new one.
@@ -169,7 +171,7 @@ If that doesn't work on your panel model, use one of these:
 |---|---|---|
 | **Admin** (you) | everything | everything |
 | **Viewer**, e.g. principal (Settings → Users & logins) | every class's reports | nothing |
-| **Classroom**, e.g. `class8a` (Classrooms → Edit) | only that class: register, entry/exit log, monthly register, analytics, and its own students' pages | its own password | Any PC or
+| **Classroom**, e.g. `class8a` (Classrooms → Manage classrooms) | only that class: register, entry/exit log, monthly register, analytics, and its own students' pages | its own password | Any PC or
 phone on the school network can open `http://<PC-IP>:8000`.
 
 ## 5. Privacy and limits (please read)
