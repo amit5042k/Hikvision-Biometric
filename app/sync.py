@@ -11,6 +11,7 @@ A device is reached in one of two ways (``devices.connection``):
 import json
 import logging
 import threading
+from datetime import datetime
 
 from . import db as dbmod
 from . import device_actions as actions
@@ -54,7 +55,7 @@ def store_events(db, device, events, source="device"):
     added, latest = 0, device["last_event_time"]
     for ev in events:
         emp, when = str(ev.get("employee_no") or "").strip(), ev.get("time")
-        if not emp or not when or len(emp) > 32:
+        if not emp or len(emp) > 32 or not _valid_time(when):
             continue
         if record_punch(db, emp, when, device["id"], source, ev.get("verify_mode"), ev.get("serial_no"),
                         name=ev.get("name")):
@@ -65,6 +66,14 @@ def store_events(db, device, events, source="device"):
     mark(db, device["id"], "ok", None)
     db.commit()
     return {"seen": len(events), "added": added}
+
+
+def _valid_time(value):
+    try:
+        datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+        return True
+    except (TypeError, ValueError):
+        return False
 
 
 def sync_events(db, device, start=None, end=None, client=None):
@@ -177,16 +186,21 @@ def handle_push_event(db, payload, remote_ip=None):
         return False
     if ev.get("majorEventType") not in (None, 5):
         return False
-    minor = ev.get("subEventType")
-    allowed = set(minors(db))
-    if minor is not None and 0 not in allowed and int(minor) not in allowed | SUCCESS_MINORS:
+    try:
+        minor = int(ev["subEventType"]) if ev.get("subEventType") is not None else None
+    except (TypeError, ValueError):
         return False
-    when = payload.get("dateTime")
-    if not when:
+    allowed = set(minors(db))
+    if minor is not None and 0 not in allowed and minor not in allowed | SUCCESS_MINORS:
+        return False
+    try:
+        punch_time = parse_device_time(payload.get("dateTime"))
+    except (TypeError, ValueError):
+        return False
+    if not punch_time or len(str(emp).strip()) > 32:
         return False
     ip = payload.get("ipAddress") or remote_ip
     device = db.execute("SELECT id FROM devices WHERE host = ?", (ip,)).fetchone() if ip else None
-    punch_time = parse_device_time(when)
     added = record_punch(db, str(emp).strip(), punch_time, device["id"] if device else None, "push",
                          ev.get("currentVerifyMode"), ev.get("serialNo"), name=ev.get("name"))
     if device:

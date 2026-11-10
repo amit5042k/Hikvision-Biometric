@@ -40,6 +40,16 @@ MIGRATIONS = [
         );
         CREATE INDEX idx_device_jobs_status ON device_jobs (status, device_id);
     """),
+    (3, """
+        ALTER TABLE device_jobs ADD COLUMN sent_at TEXT;          -- when the bridge picked the job up
+        CREATE TABLE login_attempts (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            username   TEXT NOT NULL,
+            ip         TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX idx_login_attempts ON login_attempts (username, created_at);
+    """),
 ]
 SCHEMA_VERSION = MIGRATIONS[-1][0] if MIGRATIONS else 1
 

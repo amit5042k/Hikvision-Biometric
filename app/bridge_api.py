@@ -22,6 +22,9 @@ from .db import get_db
 bp = Blueprint("bridge", __name__, url_prefix="/api/bridge")
 
 JOB_TIMEOUT_MIN = 10  # a job handed out but never answered is failed after this long
+# Actions that must not run long after they were requested (e.g. a door opening hours
+# later because the bridge PC was off when someone clicked "Open door").
+EXPIRING_ACTIONS = {"open-door": 2, "set-time": 30}  # minutes a pending job stays valid
 
 
 @bp.before_request
@@ -46,7 +49,12 @@ def poll():
     db.execute("UPDATE devices SET last_seen_at = datetime('now','localtime') WHERE connection = 'bridge'")
     db.execute("UPDATE device_jobs SET status = 'failed', result = 'Bridge did not answer in time', "
                "finished_at = datetime('now','localtime') WHERE status = 'sent' "
-               "AND created_at < datetime('now','localtime', ?)", (f"-{JOB_TIMEOUT_MIN} minutes",))
+               "AND COALESCE(sent_at, created_at) < datetime('now','localtime', ?)", (f"-{JOB_TIMEOUT_MIN} minutes",))
+    for action, minutes in EXPIRING_ACTIONS.items():
+        db.execute("UPDATE device_jobs SET status = 'failed', finished_at = datetime('now','localtime'), "
+                   "result = 'Expired: the bridge was offline, so this was not carried out late' "
+                   "WHERE status = 'pending' AND action = ? AND created_at < datetime('now','localtime', ?)",
+                   (action, f"-{minutes} minutes"))
     devices = db.execute("SELECT * FROM devices WHERE connection = 'bridge' AND enabled = 1").fetchall()
     ids = [d["id"] for d in devices]
     jobs = []
@@ -54,7 +62,8 @@ def poll():
         jobs = db.execute(f"SELECT id, device_id, action, payload FROM device_jobs WHERE status = 'pending' "
                           f"AND device_id IN ({','.join('?' * len(ids))}) ORDER BY id LIMIT 20", ids).fetchall()
         for job in jobs:
-            db.execute("UPDATE device_jobs SET status = 'sent' WHERE id = ?", (job["id"],))
+            db.execute("UPDATE device_jobs SET status = 'sent', sent_at = datetime('now','localtime') "
+                       "WHERE id = ?", (job["id"],))
     db.commit()
     settings = dbmod.get_settings(db)
     return jsonify({
@@ -92,6 +101,8 @@ def job_result(job_id):
     job = db.execute("SELECT * FROM device_jobs WHERE id = ?", (job_id,)).fetchone()
     if not job:
         abort(404)
+    if job["status"] not in ("sent", "failed") or (job["status"] == "failed" and job["sent_at"] is None):
+        return jsonify({"status": job["status"]})  # never handed out, or already answered
     body = request.get_json(force=True, silent=True) or {}
     dev = db.execute("SELECT * FROM devices WHERE id = ?", (job["device_id"],)).fetchone()
     message = body.get("message") or ""

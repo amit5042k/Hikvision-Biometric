@@ -36,6 +36,7 @@ class Day:
     late_minutes: int = 0
     early_minutes: int = 0
     ot_minutes: int = 0
+    leave: float = 0          # 1 = full day of leave, 0.5 = half day
     remarks: list = field(default_factory=list)
 
     @property
@@ -50,7 +51,7 @@ class Day:
 @dataclass
 class Summary:
     present: float = 0
-    absent: int = 0
+    absent: float = 0
     half_day: int = 0
     missing_punch: int = 0
     leave: float = 0
@@ -80,13 +81,33 @@ def parse_date(value, default=None):
         return default
 
 
-def _hm(value):
-    h, m = (value or "00:00").split(":")[:2]
-    return timedelta(hours=int(h), minutes=int(m))
+def parse_hm(value):
+    """'09:30' -> (9, 30); None for anything that is not a valid 24-hour time."""
+    try:
+        h, m = str(value).strip().split(":")[:2]
+        h, m = int(h), int(m)
+    except (AttributeError, ValueError):
+        return None
+    return (h, m) if 0 <= h < 24 and 0 <= m < 60 else None
+
+
+def _hm(value, default="09:00"):
+    h, m = parse_hm(value) or parse_hm(default)
+    return timedelta(hours=h, minutes=m)
+
+
+def _number(value, default, cast=float):
+    try:
+        return cast(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _minutes(td):
     return int(td.total_seconds() // 60)
+
+
+LEAVE_QUERY = "SELECT * FROM leaves WHERE start_date <= ? AND end_date >= ?"
 
 
 def load_employees(db, department_id=None, employee_id=None, include_inactive=False):
@@ -107,6 +128,22 @@ def load_employees(db, department_id=None, employee_id=None, include_inactive=Fa
     return db.execute(sql, args).fetchall()
 
 
+def report_employees(db, start, end, department_id=None):
+    """Employees to show in a report: everyone active, plus inactive employees
+    (leavers) who still have punches or leave in the period, so a leaver's
+    last month stays on the muster roll and salary summary."""
+    rows = load_employees(db, department_id=department_id, include_inactive=True)
+    if all(r["active"] for r in rows):
+        return rows
+    with_data = {r[0] for r in db.execute(
+        "SELECT DISTINCT employee_no FROM punches WHERE punch_time >= ? AND punch_time < ?",
+        (f"{start} 00:00:00", f"{end + timedelta(days=2)} 00:00:00"))}
+    with_leave = {r[0] for r in db.execute(
+        "SELECT DISTINCT employee_id FROM leaves WHERE start_date <= ? AND end_date >= ?",
+        (end.isoformat(), start.isoformat()))}
+    return [r for r in rows if r["active"] or r["employee_no"] in with_data or r["id"] in with_leave]
+
+
 def compute(db, start, end, employees=None, now=None):
     """Return ``[(employee_row, [Day, ...], Summary), ...]`` for the date range."""
     now = now or datetime.now()
@@ -114,15 +151,14 @@ def compute(db, start, end, employees=None, now=None):
     if not employees:
         return []
     settings = dbmod.get_settings(db)
-    before = timedelta(hours=float(settings.get("window_before_hours") or 4))
-    ot_min = int(settings.get("ot_min_minutes") or 0)
+    before = timedelta(hours=_number(settings.get("window_before_hours"), 4.0))
+    ot_min = _number(settings.get("ot_min_minutes"), 30, int)
 
     holidays = {r["date"]: r["name"] for r in db.execute(
         "SELECT date, name FROM holidays WHERE date BETWEEN ? AND ?", (start.isoformat(), end.isoformat()))}
 
     leaves = {}
-    for r in db.execute("SELECT * FROM leaves WHERE start_date <= ? AND end_date >= ?",
-                        (end.isoformat(), start.isoformat())):
+    for r in db.execute(LEAVE_QUERY, (end.isoformat(), start.isoformat())):
         leaves.setdefault(r["employee_id"], []).append(r)
 
     lo = datetime.combine(start, datetime.min.time()) - timedelta(days=1)
@@ -130,7 +166,10 @@ def compute(db, start, end, employees=None, now=None):
     punches = {}
     for r in db.execute("SELECT employee_no, punch_time FROM punches WHERE punch_time >= ? AND punch_time < ? "
                         "ORDER BY punch_time", (lo.strftime(FMT), hi.strftime(FMT))):
-        punches.setdefault(r["employee_no"], []).append(datetime.strptime(r["punch_time"], FMT))
+        try:
+            punches.setdefault(r["employee_no"], []).append(datetime.strptime(r["punch_time"], FMT))
+        except ValueError:
+            continue  # a malformed row must not break every report
 
     out = []
     for emp in employees:
@@ -148,8 +187,8 @@ def _compute_day(emp, d, times, holidays, emp_leaves, before, ot_min, now):
     if d > now.date() or (join and d < join):
         return day
 
-    start_td = _hm(emp["start_time"] or "09:00")
-    end_td = _hm(emp["end_time"] or "18:00")
+    start_td = _hm(emp["start_time"], "09:00")
+    end_td = _hm(emp["end_time"], "18:00")
     if end_td <= start_td:  # overnight shift
         end_td += timedelta(days=1)
     midnight = datetime.combine(d, datetime.min.time())
@@ -164,16 +203,18 @@ def _compute_day(emp, d, times, holidays, emp_leaves, before, ot_min, now):
     leave = next((lv for lv in emp_leaves if lv["start_date"] <= iso <= lv["end_date"]), None)
 
     if not day_punches:
-        if leave:
-            day.status = "L"
-            day.remarks.append(f"{leave['leave_type']} leave" + (" (half day)" if leave["half_day"] else ""))
-        elif holiday:
+        # holidays and weekly offs take precedence: leave is never charged on them
+        if holiday:
             day.status = "H"
             day.remarks.append(holiday)
         elif weekly_off:
             day.status = "WO"
-        elif d == now.date() and now < shift_end:
-            day.status = "-"  # shift still running, not absent yet
+        elif leave:
+            day.status = "L"
+            day.leave = 0.5 if leave["half_day"] else 1
+            day.remarks.append(f"{leave['leave_type']} leave" + (" (half day)" if leave["half_day"] else ""))
+        elif now < shift_end:
+            day.status = "-"  # shift not over yet (also across midnight), not absent yet
         else:
             day.status = "A"
         return day
@@ -205,7 +246,7 @@ def _compute_day(emp, d, times, holidays, emp_leaves, before, ot_min, now):
         return day
 
     if not day.last_out:
-        if d == now.date():
+        if now < window_end:  # still inside this day's punch window: the OUT punch may yet come
             day.status = "P"
             day.remarks.append("In")
         else:
@@ -224,8 +265,13 @@ def _compute_day(emp, d, times, holidays, emp_leaves, before, ot_min, now):
         day.remarks.append("Short hours")
     if leave:
         day.remarks.append(f"{leave['leave_type']} leave")
-        if leave["half_day"] and day.status == "A":
-            day.status = "HD"
+        if leave["half_day"]:
+            if day.status != "P":  # worked part of the day, half day on leave
+                day.status = "HD"
+                day.leave = 0.5
+        elif day.status in ("A", "HD"):  # dropped in briefly on a full day of leave
+            day.status = "L"
+            day.leave = 1
     return day
 
 
@@ -240,12 +286,12 @@ def summarize(days):
         elif d.status == "HD":
             s.present += 0.5
             s.half_day += 1
-            if any("leave" in r for r in d.remarks):
-                s.leave += 0.5
+            s.leave += d.leave
         elif d.status == "A":
             s.absent += 1
         elif d.status == "L":
-            s.leave += 1
+            s.leave += d.leave
+            s.absent += 1 - d.leave  # the other half of a half-day leave with no punches
         elif d.status == "H":
             s.holiday += 1
         elif d.status == "WO":

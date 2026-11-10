@@ -1,8 +1,10 @@
 import base64
+import hmac
 import csv
 import io
 import json
 import secrets
+import sqlite3
 from calendar import monthrange
 from datetime import date, datetime, timedelta
 
@@ -28,20 +30,34 @@ def _int(value, default=None):
         return default
 
 
+def _float(value, default=None):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _month_range(value):
     try:
         y, m = (int(x) for x in value.split("-"))
-    except (AttributeError, ValueError):
-        t = date.today()
-        y, m = t.year, t.month
-    return date(y, m, 1), date(y, m, monthrange(y, m)[1])
+        first = date(y, m, 1)
+    except (AttributeError, TypeError, ValueError):
+        first = date.today().replace(day=1)
+    return first, first.replace(day=monthrange(first.year, first.month)[1])
+
+
+def _cell(value):
+    """Neutralise spreadsheet formulas: a name like '=HYPERLINK(...)' must stay text in Excel."""
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + value
+    return value
 
 
 def _csv(filename, header, rows):
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(header)
-    w.writerows(rows)
+    w.writerows([_cell(v) for v in row] for row in rows)
     return Response(buf.getvalue(), mimetype="text/csv",
                     headers={"Content-Disposition": f"attachment; filename={filename}"})
 
@@ -59,9 +75,15 @@ def _lookups():
 @bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        user = get_db().execute("SELECT * FROM users WHERE username = ?",
-                                (request.form.get("username", "").strip(),)).fetchone()
+        db = get_db()
+        username = request.form.get("username", "").strip()
+        if _too_many_attempts(db, username):
+            flash(f"Too many failed sign-in attempts. Try again in {LOCKOUT_MINUTES} minutes.", "error")
+            return render_template("login.html"), 429
+        user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
         if user and check_password_hash(user["password_hash"], request.form.get("password", "")):
+            db.execute("DELETE FROM login_attempts WHERE username = ?", (username,))
+            db.commit()
             token = session.get("csrf_token")
             session.clear()
             session["user_id"] = user["id"]
@@ -69,10 +91,34 @@ def login():
                 session["csrf_token"] = token
             if request.form.get("password") == "admin" and user["username"] == "admin":
                 flash("You are using the default password. Please change it in Settings.", "warning")
-            nxt = request.args.get("next") or ""
-            return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("main.dashboard"))
+            return redirect(_safe_next(request.args.get("next")))
+        db.execute("INSERT INTO login_attempts (username, ip) VALUES (?, ?)", (username, request.remote_addr))
+        db.commit()
         flash("Invalid username or password.", "error")
     return render_template("login.html")
+
+
+LOCKOUT_ATTEMPTS = 5
+LOCKOUT_MINUTES = 15
+
+
+def _too_many_attempts(db, username):
+    """Lock a username, and an IP address, after repeated failures."""
+    since = f"-{LOCKOUT_MINUTES} minutes"
+    db.execute("DELETE FROM login_attempts WHERE created_at < datetime('now', '-1 day')")
+    by_user = db.execute("SELECT COUNT(*) FROM login_attempts WHERE username = ? "
+                         "AND created_at >= datetime('now', ?)", (username, since)).fetchone()[0]
+    by_ip = db.execute("SELECT COUNT(*) FROM login_attempts WHERE ip = ? "
+                       "AND created_at >= datetime('now', ?)", (request.remote_addr, since)).fetchone()[0]
+    return by_user >= LOCKOUT_ATTEMPTS or by_ip >= LOCKOUT_ATTEMPTS * 4
+
+
+def _safe_next(target):
+    """Only follow same-site paths after login ('/x', never '//host' or '/\\host')."""
+    target = target or ""
+    if target.startswith("/") and not target.startswith(("//", "/\\")) and "\\" not in target:
+        return target
+    return url_for("main.dashboard")
 
 
 @bp.route("/logout", methods=["POST"])
@@ -175,8 +221,18 @@ def employee_form(emp_id=None):
         }
         if not data["employee_no"] or not data["name"]:
             flash("Employee number and name are required.", "error")
-        elif not data["employee_no"].isalnum() or len(data["employee_no"]) > 32:
+        elif not _valid_employee_no(data["employee_no"]):
             flash("Employee number must be letters/digits only (max 32).", "error")
+        elif data["join_date"] and not att.parse_date(data["join_date"]):
+            flash("Joining date is not a valid date.", "error")
+        elif data["card_no"] and db.execute("SELECT 1 FROM employees WHERE card_no = ? AND id != ?",
+                                            (data["card_no"], emp_id or 0)).fetchone():
+            flash("Another employee already has that card number.", "error")
+        elif emp and emp["employee_no"] != data["employee_no"] and db.execute(
+                "SELECT 1 FROM punches WHERE employee_no = ? AND source != 'manual' LIMIT 1",
+                (emp["employee_no"],)).fetchone():
+            flash("This employee number is already used by the terminal (it has device punches), so it "
+                  "cannot be changed - the terminal would keep sending punches under the old number.", "error")
         else:
             clash = db.execute("SELECT id FROM employees WHERE employee_no = ? AND id != ?",
                                (data["employee_no"], emp_id or 0)).fetchone()
@@ -202,6 +258,10 @@ def employee_form(emp_id=None):
                 return redirect(url_for("main.employee_detail", emp_id=emp_id))
         emp = data | {"id": emp_id}
     return render_template("employee_form.html", emp=emp, **_lookups())
+
+
+def _valid_employee_no(value):
+    return bool(value) and len(value) <= 32 and value.isascii() and value.isalnum()
 
 
 def _push_to_devices(emp_id, device_ids=None):
@@ -297,13 +357,30 @@ def employees_import_csv():
     if not file:
         flash("Choose a CSV file.", "error")
         return redirect(url_for("main.employees"))
-    reader = csv.DictReader(io.StringIO(file.read().decode("utf-8-sig")))
-    added = updated = 0
-    for row in reader:
-        row = {(k or "").strip().lower(): (v or "").strip() for k, v in row.items()}
-        no, name = row.get("employee_no"), row.get("name")
-        if not no or not name:
+    raw = file.read()
+    for encoding in ("utf-8-sig", "cp1252", "latin-1"):  # Excel on Windows saves CSV as cp1252
+        try:
+            text = raw.decode(encoding)
+            break
+        except UnicodeDecodeError:
             continue
+    try:
+        rows = list(csv.DictReader(io.StringIO(text)))
+    except csv.Error as exc:
+        flash(f"Could not read the CSV file: {exc}", "error")
+        return redirect(url_for("main.employees"))
+    added = updated = 0
+    skipped = []
+    for line, row in enumerate(rows, start=2):
+        row = {(k or "").strip().lower(): (v or "").strip() for k, v in row.items() if isinstance(v, str) or v is None}
+        no, name = row.get("employee_no"), row.get("name")
+        if not no and not name:
+            continue
+        if not _valid_employee_no(no or "") or not name:
+            skipped.append(str(line))
+            continue
+        if row.get("join_date") and not att.parse_date(row["join_date"]):
+            row["join_date"] = ""
         dept_id = None
         if row.get("department"):
             db.execute("INSERT OR IGNORE INTO departments (name) VALUES (?)", (row["department"],))
@@ -322,7 +399,10 @@ def employees_import_csv():
                        (no, *fields.values()))
             added += 1
     db.commit()
-    flash(f"Imported {added} new and updated {updated} employees.", "success")
+    msg = f"Imported {added} new and updated {updated} employees."
+    if skipped:
+        msg += f" Skipped rows {', '.join(skipped[:20])} (missing name or invalid employee number)."
+    flash(msg, "warning" if skipped else "success")
     return redirect(url_for("main.employees"))
 
 
@@ -438,8 +518,12 @@ def device_push():
     """Receiver for the terminal's HTTP listening / event push feature."""
     db = get_db()
     token = dbmod.get_setting(db, "push_token")
-    if token and request.args.get("token") != token:
-        return jsonify({"error": "bad token"}), 403
+    if token:
+        if not hmac.compare_digest(request.args.get("token", "").encode(), token.encode()):
+            return jsonify({"error": "bad token"}), 403
+    elif not db.execute("SELECT 1 FROM devices WHERE host = ?", (request.remote_addr,)).fetchone():
+        # without a token, only accept events from the address of a registered terminal
+        return jsonify({"error": "unknown sender - set a push token in Settings"}), 403
     payloads = []
     if request.is_json:
         payloads.append(request.get_json(silent=True) or {})
@@ -469,7 +553,7 @@ def attendance_daily():
     day = att.parse_date(request.args.get("date"), date.today())
     dept = _int(request.args.get("department"))
     status = request.args.get("status", "")
-    rows = att.compute(db, day, day, att.load_employees(db, department_id=dept))
+    rows = att.compute(db, day, day, att.report_employees(db, day, day, department_id=dept))
     rows = [(e, days[0]) for e, days, _ in rows]
     if status == "late":
         rows = [r for r in rows if r[1].is_late]
@@ -556,7 +640,7 @@ def report_monthly():
     start, end = _month_range(request.args.get("month"))
     dept = _int(request.args.get("department"))
     view = request.args.get("view", "muster")
-    rows = att.compute(db, start, end, att.load_employees(db, department_id=dept))
+    rows = att.compute(db, start, end, att.report_employees(db, start, end, department_id=dept))
     days = list(att.daterange(start, end))
     export = request.args.get("export")
     if export == "muster":
@@ -604,7 +688,8 @@ def leaves():
         emp_id = _int(request.form.get("employee_id"))
         start = att.parse_date(request.form.get("start_date"))
         end = att.parse_date(request.form.get("end_date")) or start
-        if not emp_id or not start or end < start:
+        if not emp_id or not start or end < start or not db.execute(
+                "SELECT 1 FROM employees WHERE id = ?", (emp_id,)).fetchone():
             flash("Select an employee and a valid date range.", "error")
         else:
             db.execute("INSERT INTO leaves (employee_id, start_date, end_date, leave_type, half_day, reason) "
@@ -673,19 +758,24 @@ def shifts():
             return redirect(url_for("main.shifts"))
         f = request.form
         sid = _int(f.get("id"))
+        start_hm, end_hm = att.parse_hm(f.get("start_time")), att.parse_hm(f.get("end_time"))
         data = {
             "name": f.get("name", "").strip(),
-            "start_time": f.get("start_time") or "09:00",
-            "end_time": f.get("end_time") or "18:00",
-            "grace_in_min": _int(f.get("grace_in_min"), 0),
-            "grace_out_min": _int(f.get("grace_out_min"), 0),
-            "break_minutes": _int(f.get("break_minutes"), 0),
-            "half_day_hours": float(f.get("half_day_hours") or 0),
-            "full_day_hours": float(f.get("full_day_hours") or 0),
-            "weekly_off": ",".join(sorted(f.getlist("weekly_off"))),
+            "start_time": "%02d:%02d" % start_hm if start_hm else None,
+            "end_time": "%02d:%02d" % end_hm if end_hm else None,
+            "grace_in_min": max(0, _int(f.get("grace_in_min"), 0)),
+            "grace_out_min": max(0, _int(f.get("grace_out_min"), 0)),
+            "break_minutes": max(0, _int(f.get("break_minutes"), 0)),
+            "half_day_hours": _float(f.get("half_day_hours"), 0),
+            "full_day_hours": _float(f.get("full_day_hours"), 0),
+            "weekly_off": ",".join(sorted({w for w in f.getlist("weekly_off") if w in "0123456"})),
         }
         if not data["name"]:
             flash("Shift name is required.", "error")
+        elif not start_hm or not end_hm or start_hm == end_hm:
+            flash("Enter valid, different start and end times (HH:MM).", "error")
+        elif not (0 <= data["half_day_hours"] <= data["full_day_hours"] <= 24):
+            flash("Half-day hours must not exceed full-day hours, and both must be between 0 and 24.", "error")
         else:
             cols = list(data)
             try:
@@ -697,7 +787,8 @@ def shifts():
                                [data[c] for c in cols])
                 db.commit()
                 flash("Shift saved.", "success")
-            except Exception:
+            except sqlite3.IntegrityError:
+                db.rollback()
                 flash("A shift with that name already exists.", "error")
         return redirect(url_for("main.shifts"))
     rows = db.execute("SELECT s.*, (SELECT COUNT(*) FROM employees e WHERE e.shift_id = s.id) AS emp_count "
@@ -756,6 +847,14 @@ def bulk_shift():
     return redirect(request.referrer or url_for("main.employees"))
 
 
+NUMERIC_SETTINGS = {
+    "sync_interval_min": (0, 1440, "Auto-sync interval"),
+    "initial_sync_days": (1, 366, "First sync look-back"),
+    "window_before_hours": (0, 12, "Hours before shift"),
+    "ot_min_minutes": (0, 600, "Minimum overtime"),
+}
+
+
 @bp.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
@@ -776,11 +875,27 @@ def settings():
         elif g.user["role"] != "admin":
             flash("Only administrators can change settings.", "error")
         elif form == "general":
-            for key in dbmod.DEFAULT_SETTINGS:
-                if key in request.form:
-                    dbmod.set_setting(db, key, request.form[key].strip())
-            db.commit()
-            flash("Settings saved.", "success")
+            errors = []
+            for key, (lo, hi, label) in NUMERIC_SETTINGS.items():
+                value = _float(request.form.get(key))
+                if key in request.form and (value is None or not lo <= value <= hi):
+                    errors.append(f"{label} must be a number from {lo:g} to {hi:g}.")
+            minors = request.form.get("event_minors", "0").replace(" ", "")
+            if not minors or not all(x.isdigit() for x in minors.split(",")):
+                errors.append("Event minor codes must be numbers separated by commas, e.g. 75,1,38 (or 0).")
+            if errors:
+                for e in errors:
+                    flash(e, "error")
+            else:
+                for key in ("company_name", "sync_interval_min", "initial_sync_days", "event_minors",
+                            "window_before_hours", "ot_min_minutes", "push_token"):
+                    if key in request.form:
+                        value = request.form[key].strip()
+                        if key in NUMERIC_SETTINGS:
+                            value = "%g" % float(value)
+                        dbmod.set_setting(db, key, value)
+                db.commit()
+                flash("Settings saved.", "success")
         elif form == "user":
             username = request.form.get("username", "").strip()
             password = request.form.get("password", "")

@@ -32,6 +32,10 @@ log = logging.getLogger("hik-bridge")
 CHUNK = 500
 
 
+class TokenRejected(Exception):
+    pass
+
+
 class Bridge:
     def __init__(self, server_url, token, poll_seconds=20, session=None):
         self.server = server_url.rstrip("/")
@@ -44,7 +48,8 @@ class Bridge:
     def _api(self, method, path, **kwargs):
         resp = self.http.request(method, f"{self.server}/api/bridge{path}", timeout=60, **kwargs)
         if resp.status_code == 401:
-            raise SystemExit("Server rejected the bridge token - copy it again from Settings → Bridge agent.")
+            raise TokenRejected("Server rejected the bridge token - copy it again from Settings -> Bridge agent "
+                                "into bridge.ini. Retrying every minute.")
         resp.raise_for_status()
         return resp.json()
 
@@ -104,13 +109,23 @@ class Bridge:
     def forever(self):
         log.info("Bridge started, talking to %s", self.server)
         while True:
+            delay = self.poll_seconds
             try:
                 self.cycle()
+            except TokenRejected as exc:
+                log.error("%s", exc)
+                delay = 60
+                try:  # pick up a corrected bridge.ini without needing a restart
+                    url, token, poll = load_config()
+                    self.server, self.poll_seconds = url.rstrip("/"), poll
+                    self.http.headers["Authorization"] = f"Bearer {token}"
+                except SystemExit as cfg_error:
+                    log.error("%s", cfg_error)
             except requests.RequestException as exc:
                 log.warning("Server not reachable (%s); retrying", exc)
             except Exception:
                 log.exception("Unexpected error; retrying")
-            time.sleep(self.poll_seconds)
+            time.sleep(delay)
 
 
 def load_config():
