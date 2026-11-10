@@ -1,0 +1,64 @@
+plugins {
+    id "com.android.application"
+}
+
+// The kiosk screen is the same HTML/JS the server uses (single source of truth):
+// it is copied from ../classroom_app/static into the app at build time.
+def kioskSrc = file("../../classroom_app/static")
+def kioskOut = layout.buildDirectory.dir("generated/kioskAssets")
+tasks.register("syncKioskAssets", Copy) {
+    from(new File(kioskSrc, "classroom")) { include "kiosk.js", "faces.js", "kiosk.css"; into "www" }
+    from(new File(kioskSrc, "faceapi")) { include "face-api.js", "LICENSE.txt"; into "www" }
+    from(new File(kioskSrc, "faceapi/model")) { into "www/model" }
+    into kioskOut
+}
+preBuild.dependsOn "syncKioskAssets"
+
+android {
+    namespace "org.school.ifpclassroom"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "org.school.ifpclassroom"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    sourceSets {
+        main.assets.srcDirs += kioskOut
+    }
+
+    // Release signing: put keystore details in ~/.gradle/gradle.properties or pass -P on the
+    // command line (IFP_KEYSTORE, IFP_KEYSTORE_PASSWORD, IFP_KEY_ALIAS, IFP_KEY_PASSWORD).
+    signingConfigs {
+        release {
+            if (project.hasProperty("IFP_KEYSTORE")) {
+                storeFile file(IFP_KEYSTORE)
+                storePassword IFP_KEYSTORE_PASSWORD
+                keyAlias IFP_KEY_ALIAS
+                keyPassword IFP_KEY_PASSWORD
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (project.hasProperty("IFP_KEYSTORE")) signingConfig signingConfigs.release
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    // the face models are already compressed; storing them uncompressed makes loading faster
+    androidResources {
+        noCompress "bin", "json"
+    }
+}
+
+dependencies {
+    implementation "androidx.webkit:webkit:1.11.0"
+    implementation "androidx.core:core:1.13.1"
+}

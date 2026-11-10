@@ -190,6 +190,10 @@ def settings_save():
     threshold = min(max(threshold, 0.3), 0.7)
     detector = request.form.get("class_detector") if request.form.get("class_detector") in ("ssd", "tiny") else "ssd"
     offs = ",".join(str(d) for d in range(7) if request.form.get(f"off_{d}"))
+    grace = min(max(_int(request.form.get("class_late_grace"), 10), 0), 120)
+    low = min(max(_int(request.form.get("class_low_attendance"), 75), 1), 100)
+    dbmod.set_setting(db, "class_late_grace", str(grace))
+    dbmod.set_setting(db, "class_low_attendance", str(low))
     dbmod.set_setting(db, "class_match_threshold", f"{threshold:.2f}")
     dbmod.set_setting(db, "class_detector", detector)
     dbmod.set_setting(db, "class_weekly_off", offs)
@@ -506,12 +510,82 @@ def monthly():
                            rooms=_rooms(), class_names=_class_names(), roles=ROLES)
 
 
+# ----------------------------------------------------------- analytics ----
+@bp.route("/classroom/analytics")
+@staff_required
+def analytics():
+    db = get_db()
+    today = date.today()
+    preset = request.args.get("range", "month")
+    start = parse_date(request.args.get("start"))
+    end = parse_date(request.args.get("end"))
+    if not (start and end and start <= end):
+        if preset == "week":
+            start, end = today - timedelta(days=today.weekday()), today
+        elif preset == "30":
+            start, end = today - timedelta(days=29), today
+        elif preset == "year":
+            # Indian academic year: April to March
+            y = today.year if today.month >= 4 else today.year - 1
+            start, end = date(y, 4, 1), today
+        else:
+            preset, start, end = "month", today.replace(day=1), today
+    else:
+        preset = "custom"
+    if (end - start).days > 400:
+        start = end - timedelta(days=400)
+    class_name = request.args.get("class_name", "")
+    data = cl.analytics(db, start, end, class_name=class_name)
+    export = request.args.get("export")
+    if export == "students":
+        rows = sorted(data["students"], key=lambda r: (r["percent"] is None, r["percent"] or 0))
+        return _csv(f"student-attendance-{start}-to-{end}.csv",
+                    ["Number", "Name", "Class", "Days present", "Days absent", "Late arrivals", "Attendance %"],
+                    [[r["person"]["person_no"], r["person"]["name"], r["person"]["class_name"] or "", r["present"],
+                      r["absent"], r["late"], "" if r["percent"] is None else r["percent"]] for r in rows])
+    if export == "teachers":
+        return _csv(f"teacher-time-{start}-to-{end}.csv",
+                    ["Number", "Name", "Days seen", "Minutes in class", "Average minutes per day"],
+                    [[r["person"]["person_no"], r["person"]["name"], r["days"], r["minutes"], r["per_day"]]
+                     for r in data["teachers"]])
+    if export == "daily":
+        return _csv(f"daily-attendance-{start}-to-{end}.csv", ["Date", "Present", "Students", "Attendance %"],
+                    [[d["date"].isoformat(), d["present"], d["total"], "" if d["percent"] is None else d["percent"]]
+                     for d in data["daily"]])
+    return render_template("classroom/analytics.html", data=data, start=start, end=end, preset=preset,
+                           class_name=class_name, class_names=_class_names())
+
+
+# ------------------------------------------------------- panel app ----
+@bp.route("/app")
+def panel_app():
+    """Download page for the IFP Android app. No login: open it in the panel's browser."""
+    import os
+    from flask import current_app
+    apk = os.path.join(current_app.static_folder, "app", "ifp-classroom.apk")
+    size = os.path.getsize(apk) // (1024 * 1024) if os.path.exists(apk) else None
+    return render_template("classroom/panel_app.html", size=size)
+
+
 # --------------------------------------------------------------- kiosk ----
 def _kiosk_room(token):
     room = get_db().execute("SELECT * FROM classrooms WHERE kiosk_token = ? AND enabled = 1", (token,)).fetchone()
     if room is None:
         abort(404)
     return room
+
+
+@bp.after_app_request
+def kiosk_cors(response):
+    """The IFP Android app runs its page from a secure in-app address and calls
+    the kiosk API cross-origin. The API is authorised by the secret in the URL,
+    not by cookies, so any origin may call it."""
+    if request.path.startswith("/api/class/"):
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        response.headers["Access-Control-Max-Age"] = "86400"
+    return response
 
 
 @bp.route("/kiosk/<token>")

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A simple face-in-frame mark -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="4"
+        android:pathData="M34,44 L34,36 Q34,34 36,34 L44,34 M64,34 L72,34 Q74,34 74,36 L74,44 M74,64 L74,72 Q74,74 72,74 L64,74 M44,74 L36,74 Q34,74 34,72 L34,64" />
+    <path android:fillColor="#FFFFFF" android:pathData="M54,42 a8,8 0 1,1 -0.01,0 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M40,68 Q42,57 54,57 Q66,57 68,68 Z" />
+</vector>

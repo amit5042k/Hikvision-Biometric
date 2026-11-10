@@ -299,6 +299,120 @@ def monthly(db, start, end, classroom_id=None, class_name="", role="student", no
     return out, days
 
 
+def school_days(db, start, end, today_=None):
+    """Working days (not holiday / weekly off) from start to end, never past today."""
+    today_ = today_ or date.today()
+    holidays = {r["date"] for r in db.execute("SELECT date FROM holidays WHERE date BETWEEN ? AND ?",
+                                              (start.isoformat(), end.isoformat()))}
+    offs = weekly_offs(db)
+    out = []
+    d = start
+    while d <= min(end, today_):
+        if not day_kind(db, d, offs, holidays):
+            out.append(d)
+        d += timedelta(days=1)
+    return out
+
+
+def analytics(db, start, end, class_name="", now=None):
+    """Numbers for the Analytics page, for school days between start and end."""
+    now = now or datetime.now()
+    days = school_days(db, start, end, now.date())
+    day_set = {d.isoformat() for d in days}
+    grace = int(dbmod.get_setting(db, "class_late_grace") or 10)
+    low = float(dbmod.get_setting(db, "class_low_attendance") or 75)
+    plist = periods(db)
+    late_after = None
+    if plist:
+        first = datetime.strptime(plist[0]["start_time"], "%H:%M") + timedelta(minutes=grace)
+        late_after = first.strftime("%H:%M:%S")
+
+    sql = "SELECT * FROM class_persons WHERE active = 1"
+    args = []
+    if class_name:
+        sql += " AND (class_name = ? OR role = 'teacher')"
+        args.append(class_name)
+    persons = db.execute(sql + " ORDER BY class_name, name", args).fetchall()
+    students = [p for p in persons if p["role"] == "student"]
+    teachers = [p for p in persons if p["role"] == "teacher"]
+
+    # first sighting of each person on each day (any classroom)
+    first_seen = {}
+    for r in db.execute("SELECT person_id, substr(seen_at, 1, 10) AS d, MIN(substr(seen_at, 12)) AS t "
+                        "FROM class_sightings WHERE seen_at BETWEEN ? AND ? GROUP BY person_id, d",
+                        (f"{start} 00:00:00", f"{end} 23:59:59")):
+        if r["d"] in day_set:
+            first_seen.setdefault(r["person_id"], {})[r["d"]] = r["t"]
+
+    student_rows = []
+    for p in students:
+        seen = first_seen.get(p["id"], {})
+        present = len(seen)
+        late = sum(1 for t in seen.values() if late_after and t > late_after)
+        pct = round(100 * present / len(days), 1) if days else None
+        student_rows.append({"person": p, "present": present, "absent": len(days) - present, "late": late,
+                             "percent": pct, "low": pct is not None and pct < low})
+
+    daily = []
+    for d in days:
+        iso = d.isoformat()
+        n = sum(1 for p in students if iso in first_seen.get(p["id"], {}))
+        daily.append({"date": d, "present": n, "total": len(students),
+                      "percent": round(100 * n / len(students), 1) if students else None})
+
+    classes = {}
+    for r in student_rows:
+        c = classes.setdefault(r["person"]["class_name"] or "(no class)",
+                               {"name": r["person"]["class_name"] or "(no class)", "students": 0, "present": 0,
+                                "late": 0, "low": 0})
+        c["students"] += 1
+        c["present"] += r["present"]
+        c["late"] += r["late"]
+        c["low"] += 1 if r["low"] else 0
+    for c in classes.values():
+        possible = c["students"] * len(days)
+        c["percent"] = round(100 * c["present"] / possible, 1) if possible else None
+
+    # teacher time in classrooms, from presence sessions
+    rooms = {r["id"]: r for r in db.execute("SELECT * FROM classrooms")}
+    teacher_ids = {p["id"] for p in teachers}
+    groups = {}
+    for r in db.execute("SELECT classroom_id, person_id, seen_at FROM class_sightings WHERE seen_at BETWEEN ? AND ? "
+                        "ORDER BY seen_at", (f"{start} 00:00:00", f"{end} 23:59:59")):
+        groups.setdefault((r["classroom_id"], r["person_id"], r["seen_at"][:10]), []).append(
+            datetime.strptime(r["seen_at"], FMT))
+    teacher_minutes, teacher_days, room_people = {}, {}, {}
+    for (rid, pid, d), times in groups.items():
+        if d not in day_set:
+            continue
+        room_people.setdefault(rid, {}).setdefault(d, set()).add(pid)
+        if pid in teacher_ids and rid in rooms:
+            mins = sum(s.minutes for s in build_sessions(times, rooms[rid]["absence_minutes"], now))
+            teacher_minutes[pid] = teacher_minutes.get(pid, 0) + mins
+            teacher_days.setdefault(pid, set()).add(d)
+    teacher_rows = [{"person": p, "minutes": teacher_minutes.get(p["id"], 0),
+                     "days": len(teacher_days.get(p["id"], ())),
+                     "per_day": teacher_minutes.get(p["id"], 0) // max(1, len(teacher_days.get(p["id"], ())))}
+                    for p in teachers]
+    room_rows = []
+    for rid, room in sorted(rooms.items(), key=lambda kv: kv[1]["name"]):
+        per_day = room_people.get(rid, {})
+        used = [len(v) for v in per_day.values()]
+        room_rows.append({"room": room, "days_used": len(used),
+                          "avg_people": round(sum(used) / len(used), 1) if used else 0,
+                          "status": classroom_status(room, now)})
+
+    possible = len(students) * len(days)
+    total_present = sum(r["present"] for r in student_rows)
+    return {
+        "days": days, "daily": daily, "students": student_rows, "teachers": teacher_rows, "rooms": room_rows,
+        "classes": sorted(classes.values(), key=lambda c: c["name"]), "late_after": late_after, "low": low,
+        "overall": round(100 * total_present / possible, 1) if possible else None,
+        "low_count": sum(1 for r in student_rows if r["low"]),
+        "late_count": sum(r["late"] for r in student_rows),
+    }
+
+
 def fmt_time(value):
     return value.strftime("%H:%M") if value else ""
 

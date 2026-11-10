@@ -1,77 +1,94 @@
 # IFP Classroom Attendance
 
-A standalone, self-hosted app for schools. It uses the camera on each classroom
-**interactive flat panel (IFP)** to recognise students and teachers by face,
-mark attendance, and record when each person **enters** and **leaves** the
-room. You view and download the records from any PC on the school network.
+A standalone, self-hosted system for schools. It uses the camera on each
+classroom **interactive flat panel (IFP)** to recognise students and teachers by
+face, mark attendance, and record when each person **enters** and **leaves** the
+room. It has its own database, logins and settings, and does not connect to any
+other attendance software.
 
-It is a separate app with its own database, logins and settings. It does not
-connect to any other attendance software.
+**Your Windows PC is the server**: it stores all data and runs all analysis.
+**Each Android panel runs the IFP Classroom app as a client.**
 
-- **Works on Android-only panels** (no OPS PC needed). Nothing is installed on
-  the panel except Chrome.
-- **Face recognition runs on the panel**, inside the browser. No video leaves
-  the classroom. The panel sends only "person seen at this time".
-- **Entry / exit:** entry is the first time a person is seen. Exit is the last
-  time they were seen, once they have been out of view for the minutes you set
-  per room.
-- **Reports on your PC:**
-  - Class register per room and day, with per-period attendance.
-  - Entry/exit log.
-  - Monthly register with attendance %.
-  - Excel, CSV and print.
-- **Enrolment:**
-  - Add students and teachers one by one or from a CSV.
-  - Add face photos by upload, from a camera, or in bulk with files named by
-    admission number.
-- **Reliable on the panel:** records are kept through network outages, the
-  panel's clock is corrected by the server, and slow panels switch to a faster
-  detector by themselves.
+- **Android client app** (`android/`, ready-made APK served by the server at
+  `/app`).
+  - Recognises faces on the panel: no video leaves the room.
+  - Works with a plain `http://` server (no Chrome settings needed).
+  - Starts when the panel is switched on, keeps the screen awake, and has a
+    PIN-protected settings screen.
+  - Keeps records through network or server outages.
+- **Windows server**: one installer script (`windows/`).
+  - Starts with Windows and opens the firewall port.
+  - Backs up the database daily.
+- **Analysis on the server:**
+  - Analytics: attendance trends, class-wise %, students below 75%, late
+    arrivals, teacher time in class, room usage.
+  - Class register (with periods), entry/exit log and monthly register.
+  - Excel and CSV downloads.
+- **Enrolment:** add students and teachers one by one or from a CSV. Add face
+  photos by upload, from a camera, or in bulk with files named by admission
+  number.
 - **Logins:** admin and viewer (read-only) logins, sign-in lockout and an audit
   log.
 
-## Installing the server
+## Install
 
-Use a PC or server that stays on during school hours. The panels and your PC
-must be able to reach it over the network. It needs Python 3.10 or later.
+Full steps: **[docs/SETUP.md](docs/SETUP.md)**.
 
-**Windows:**
-1. Install Python from python.org and tick *Add Python to PATH*.
-2. Copy this `ifp-classroom` folder to the PC.
-3. Double-click `start_server_windows.bat`.
+1. **Server (Windows PC):**
+   1. Install Python 3.10+ from python.org, ticking *Add Python to PATH*.
+   2. Copy this folder to the PC.
+   3. Run `windows\install_windows_server.bat` as administrator.
+   4. Open `http://<PC-IP>:8000` and sign in as **admin / admin**. Change the
+      password.
+2. **Set up:** add classrooms, students and teachers, and face photos.
+3. **Each panel:**
+   1. Open `http://<PC-IP>:8000/app` in the panel's browser and install the app.
+   2. Paste that room's kiosk link.
+   3. Tap **Save and start**.
 
-**Linux / macOS:**
+Running on Linux or macOS instead:
 
 ```bash
-cd ifp-classroom
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-CLASSROOM_DATA_DIR=./data python run.py      # serves on http://0.0.0.0:8000
+CLASSROOM_DATA_DIR=./data python run.py      # http://0.0.0.0:8000
 ```
-
-Then:
-
-1. Open `http://<server-ip>:8000` on your PC and sign in as **admin / admin**.
-2. Change the password straight away under **Settings**.
-3. Follow **[docs/SETUP.md](docs/SETUP.md)**: classrooms, people, face photos,
-   Android panel setup, accuracy tips and privacy notes.
-
-Give the server PC a fixed IP address, so that the panels' kiosk links keep
-working.
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `HOST` / `PORT` | `0.0.0.0` / `8000` | Listen address |
-| `CLASSROOM_DATA_DIR` | `instance/` | Folder for the database, session key and backups |
+| `CLASSROOM_DATA_DIR` | `instance/` (`data\` with the Windows installer) | Database, session key, backups, logs |
 | `SECRET_KEY` | generated once in the data folder | Session signing key |
 | `BEHIND_PROXY` / `HTTPS_ONLY` | off | Set to `1` behind an HTTPS reverse proxy |
-
-Commands:
 
 ```bash
 flask --app classroom_app backup        # copy the database into <data dir>/backups
 flask --app classroom_app reset-admin   # reset the admin password to "admin"
 ```
+
+## Building the Android app
+
+The APK in `classroom_app/static/app/ifp-classroom.apk` is ready to use. To
+rebuild it, for example after changing the kiosk code:
+
+1. Install Android Studio, or the Android SDK command-line tools with platform
+   34 and build-tools 34.
+2. Build:
+
+   ```bash
+   cd android
+   ./gradlew assembleRelease -PIFP_KEYSTORE=/path/ifp-classroom-release.jks \
+       -PIFP_KEYSTORE_PASSWORD=... -PIFP_KEY_ALIAS=ifpclassroom -PIFP_KEY_PASSWORD=...
+   cp app/build/outputs/apk/release/app-release.apk ../classroom_app/static/app/ifp-classroom.apk
+   ```
+
+The kiosk screen (`classroom_app/static/classroom/` plus the face models) is
+copied into the app at build time, so the app and the server's `/kiosk/` page
+always run the same code.
+
+Sign updates with the **same keystore**, or panels must uninstall the old app
+first. Keep the keystore private and backed up; it is not stored in this
+repository.
 
 ## Development
 
@@ -86,6 +103,9 @@ classroom_app/views.py      classroom pages, enrolment, kiosk API (/kiosk/<link>
 classroom_app/admin.py      sign-in, users, school settings, holidays, audit log, backup
 classroom_app/db.py         database setup and migrations (schema.sql is the baseline)
 classroom_app/static/faceapi/     face-api (MIT, vladmandic) and its models, served locally
-classroom_app/static/classroom/   kiosk and enrolment JavaScript
+classroom_app/static/classroom/   kiosk and enrolment JavaScript (shared with the Android app)
+classroom_app/static/app/   the Android APK, offered to panels at /app
+android/                    Android client app (WebView + in-app secure origin, boot start, foreground service)
+windows/                    Windows server installer, start-up task, backup, uninstaller
 run.py                      production entry point (waitress)
 ```

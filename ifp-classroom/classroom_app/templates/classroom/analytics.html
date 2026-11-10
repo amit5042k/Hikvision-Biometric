@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Analytics{% endblock %}
+{% block content %}
+{% set qs = dict(start=start, end=end, class_name=class_name) %}
+<div class="page-head">
+  <div><h1>Analytics</h1>
+    <div class="muted">{{ start.strftime('%d %b %Y') }} – {{ end.strftime('%d %b %Y') }} · {{ data.days|length }} school days{% if class_name %} · class {{ class_name }}{% endif %}</div></div>
+  <div class="actions no-print">
+    <a class="btn" href="{{ url_for('classroom.analytics', export='students', **qs) }}">Students CSV</a>
+    <a class="btn" href="{{ url_for('classroom.analytics', export='daily', **qs) }}">Daily CSV</a>
+    <a class="btn" href="{{ url_for('classroom.analytics', export='teachers', **qs) }}">Teachers CSV</a>
+    <button class="btn" onclick="window.print()">Print</button>
+  </div>
+</div>
+
+<div class="card no-print">
+  <form class="filters" method="get">
+    <label>Period<select name="range" onchange="this.form.start.value='';this.form.end.value='';this.form.submit()">
+      {% for k, v in [('week', 'This week'), ('month', 'This month'), ('30', 'Last 30 days'), ('year', 'Academic year (from April)'), ('custom', 'Custom dates')] %}
+      <option value="{{ k }}" {{ 'selected' if k == preset }}>{{ v }}</option>{% endfor %}</select></label>
+    <label>From<input type="date" name="start" value="{{ start }}"></label>
+    <label>To<input type="date" name="end" value="{{ end }}"></label>
+    <label>Class<select name="class_name"><option value="">All classes</option>{% for c in class_names %}<option {{ 'selected' if c == class_name }}>{{ c }}</option>{% endfor %}</select></label>
+    <button class="btn" type="submit">Show</button>
+  </form>
+</div>
+
+<div class="stats">
+  <div class="stat info"><div class="num">{{ '–' if data.overall is none else data.overall ~ '%' }}</div><div class="lbl">Average attendance</div></div>
+  <div class="stat"><div class="num">{{ data.students|length }}</div><div class="lbl">Students</div></div>
+  <div class="stat {{ 'bad' if data.low_count else 'ok' }}"><div class="num">{{ data.low_count }}</div><div class="lbl">Below {{ data.low|int }}%</div></div>
+  <div class="stat {{ 'warn' if data.late_count else '' }}"><div class="num">{{ data.late_count if data.late_after else '–' }}</div><div class="lbl">Late arrivals</div></div>
+</div>
+
+<div class="card">
+  <h2>Daily student attendance %</h2>
+  {% if data.daily %}
+  <div class="chart" role="img" aria-label="Daily student attendance percentage">
+    <div class="chart-grid">{% for v in (100, 50, 0) %}<i class="gl" style="bottom:{{ v }}%"></i><span style="bottom:{{ v }}%">{{ v }}%</span>{% endfor %}
+      <div class="chart-ref" style="bottom:{{ data.low }}%" title="Low-attendance line: {{ data.low|int }}%"><b>{{ data.low|int }}%</b></div></div>
+    <div class="chart-bars">
+      {% for d in data.daily %}
+      <div class="chart-col" tabindex="0" data-tip="{{ d.date.strftime('%a %d %b') }} · {{ d.present }} of {{ d.total }} present · {{ d.percent }}%">
+        <span class="chart-bar" style="height:{{ d.percent or 0 }}%"></span>
+      </div>{% endfor %}
+    </div>
+    <div class="chart-x"><span>{{ data.daily[0].date.strftime('%d %b') }}</span><span>{{ data.daily[-1].date.strftime('%d %b') }}</span></div>
+    <div class="chart-tip" id="tip" hidden></div>
+  </div>
+  {% else %}<p class="muted">No school days in this period yet.</p>{% endif %}
+</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <h2>By class</h2>
+    <table>
+      <thead><tr><th>Class</th><th class="num">Students</th><th class="num">Attendance</th><th class="num">Below {{ data.low|int }}%</th><th class="num">Late</th></tr></thead>
+      <tbody>
+      {% for c in data.classes %}
+        <tr><td><a href="{{ url_for('classroom.analytics', start=start, end=end, class_name=c.name if c.name != '(no class)' else '') }}">{{ c.name }}</a></td>
+          <td class="num">{{ c.students }}</td>
+          <td class="num"><span class="meter"><span style="width:{{ c.percent or 0 }}%"></span></span> {{ '–' if c.percent is none else c.percent ~ '%' }}</td>
+          <td class="num">{{ c.low or '' }}</td><td class="num">{{ c.late or '' }}</td></tr>
+      {% else %}<tr><td colspan="5" class="muted">No students.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h2>Classrooms</h2>
+    <table>
+      <thead><tr><th>Classroom</th><th>Panel</th><th class="num">Days in use</th><th class="num">Avg. people / day</th></tr></thead>
+      <tbody>
+      {% for r in data.rooms %}
+        <tr><td>{{ r.room.name }}</td><td><span class="dot {{ 'ok' if r.status == 'online' else 'error' if r.status == 'offline' }}"></span>{{ r.status }}</td>
+          <td class="num">{{ r.days_used }}</td><td class="num">{{ r.avg_people }}</td></tr>
+      {% else %}<tr><td colspan="4" class="muted">No classrooms.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Students needing attention</h2>
+  <p class="muted small">Sorted by attendance, lowest first.{% if data.late_after %} Late = first seen after {{ data.late_after[:5] }}.{% else %} Add timetable periods on the Classrooms page to count late arrivals.{% endif %}</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>No.</th><th>Name</th><th>Class</th><th class="num">Present</th><th class="num">Absent</th><th class="num">Late</th><th class="num">Attendance</th><th></th></tr></thead>
+    <tbody>
+    {% for r in data.students|sort(attribute='present') %}
+      {% if loop.index <= 50 %}
+      <tr><td>{{ r.person.person_no }}</td>
+        <td><a href="{{ url_for('classroom.person_detail', person_id=r.person.id) }}">{{ r.person.name }}</a></td>
+        <td>{{ r.person.class_name or '' }}</td><td class="num">{{ r.present }}</td><td class="num">{{ r.absent }}</td>
+        <td class="num">{{ r.late or '' }}</td><td class="num">{{ '–' if r.percent is none else r.percent ~ '%' }}</td>
+        <td>{% if r.low %}<span class="badge s-A">below {{ data.low|int }}%</span>{% endif %}</td></tr>
+      {% endif %}
+    {% else %}<tr><td colspan="8" class="muted">No students.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if data.students|length > 50 %}<p class="muted small">Showing the 50 lowest. Download "Students CSV" for everyone.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2>Teachers — time in classrooms</h2>
+  <table>
+    <thead><tr><th>No.</th><th>Name</th><th class="num">Days seen</th><th class="num">Total time</th><th class="num">Average per day</th></tr></thead>
+    <tbody>
+    {% for t in data.teachers|sort(attribute='minutes', reverse=True) %}
+      <tr><td>{{ t.person.person_no }}</td><td><a href="{{ url_for('classroom.person_detail', person_id=t.person.id) }}">{{ t.person.name }}</a></td>
+        <td class="num">{{ t.days }}</td><td class="num">{{ t.minutes|hm or '0:00' }}</td><td class="num">{{ t.per_day|hm or '0:00' }}</td></tr>
+    {% else %}<tr><td colspan="5" class="muted">No teachers.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var tip = document.getElementById('tip');
+  if (!tip) return;
+  var chart = tip.parentNode;
+  function show(col) {
+    tip.textContent = col.dataset.tip; tip.hidden = false;
+    var c = chart.getBoundingClientRect(), r = col.getBoundingClientRect();
+    var x = Math.min(Math.max(r.left - c.left + r.width / 2 - tip.offsetWidth / 2, 0), c.width - tip.offsetWidth);
+    tip.style.left = x + 'px';
+  }
+  chart.querySelectorAll('.chart-col').forEach(function (col) {
+    col.addEventListener('mouseenter', function () { show(col); });
+    col.addEventListener('focus', function () { show(col); });
+    col.addEventListener('mouseleave', function () { tip.hidden = true; });
+    col.addEventListener('blur', function () { tip.hidden = true; });
+  });
+})();
+</script>
+{% endblock %}

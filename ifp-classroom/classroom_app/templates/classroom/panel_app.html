@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Panel app · {{ school_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="login-wrap">
+  <div style="max-width:640px;width:100%">
+    <h1>IFP Classroom — panel app</h1>
+    <p class="muted">{{ school_name }} · Android app for the classroom interactive flat panel</p>
+    <div class="card">
+      {% if size is not none %}
+      <a class="btn primary" href="{{ url_for('static', filename='app/ifp-classroom.apk') }}" download>Download the app ({{ size }} MB)</a>
+      {% else %}<p class="flash error">The app file is missing from this server.</p>{% endif %}
+      <ol class="small" style="margin-top:16px">
+        <li>Tap <b>Download</b> on this panel, then open the downloaded file.</li>
+        <li>If Android asks, allow <b>Install unknown apps</b> for the browser (or file manager), then tap <b>Install</b>.</li>
+        <li>Open <b>IFP Classroom</b>. Paste this room's <b>kiosk link</b> (from the Classrooms page on the server PC) and tap <b>Test connection</b>, then <b>Save and start</b>.</li>
+        <li>Allow the camera when asked. Done — the panel now marks attendance. Tap <b>⚙ App settings</b> on the screen to change the room later.</li>
+      </ol>
+      <p class="small muted">To update the app, download and install it again over the old one; settings are kept.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

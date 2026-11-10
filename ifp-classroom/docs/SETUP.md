@@ -1,49 +1,67 @@
-# Classroom attendance with the IFP camera (Android panels)
-
-This app uses the camera on each classroom **interactive flat panel (IFP)** to
-recognise students and teachers by face. It records when each person **enters**
-and **leaves** the room and keeps a daily and monthly attendance register. You
-view and download the records from any PC in the school.
-
-It is built for **Android-only panels (no OPS PC module)**. Nothing is installed
-on the panel except a browser.
+# IFP Classroom Attendance — setup guide
 
 ```
- Classroom panel (Android, Chrome)                 School server (this app)              Your PC
- ┌──────────────────────────────┐   "seen" records   ┌───────────────────────┐   browser   ┌──────────┐
- │ camera → face recognition     │ ─────────────────▶ │ entries / exits        │ ◀────────── │ reports, │
- │ (runs inside the browser)     │ ◀───────────────── │ class & monthly        │             │ Excel    │
- └──────────────────────────────┘   enrolled faces    │ registers              │             └──────────┘
-                                                      └───────────────────────┘
+ Classroom panels (Android app)               Your Windows PC = the server               Any PC / phone
+ ┌───────────────────────────────┐  "seen"    ┌──────────────────────────────┐  browser  ┌──────────────┐
+ │ IFP Classroom app             │ ─────────▶ │ stores entries / exits       │ ◀──────── │ reports,     │
+ │ camera → face recognition     │ ◀───────── │ registers, analytics, Excel  │           │ analytics,   │
+ │ (runs on the panel)           │  face data │ http://<PC-IP>:8000          │           │ downloads    │
+ └───────────────────────────────┘            └──────────────────────────────┘           └──────────────┘
 ```
 
-* The panel downloads the face data of enrolled people and does the recognition
-  itself. It sends only "person X seen at time T". No video leaves the room and
-  nothing is recorded.
+* **Server: your Windows PC** (the IT administrator's PC). It holds all data and
+  runs all analysis: registers, entry/exit log, monthly register and
+  analytics.
+* **Client: the IFP Classroom Android app** on each classroom panel. It
+  recognises faces on the panel and sends only "person X seen at time T". No
+  video leaves the room and nothing is recorded.
 * **Entry** is the first time a person is seen. **Exit** is the last time they
-  were seen, once they have been out of view for the minutes set for that
-  classroom (default 10). Coming back later starts a new entry.
-* If the network drops, the panel keeps its records and sends them when the
-  network returns. The server corrects the panel's clock if it is wrong.
+  were seen, once they have been out of view for the minutes set for that room
+  (default 10).
+* If the network or the server PC is down, the panel keeps its records and
+  sends them later. The server corrects the panel's clock if it is wrong.
 
-## 1. The server
+## 1. Install the server on your Windows PC (once)
 
-Run the app on an always-on PC or server on the school network (see
-[README](../README.md) → *Installing the server*). Every panel and your PC must
-be able to open its address, e.g. `http://192.168.1.10:8000`.
+1. Install **Python 3.10 or newer** from python.org. During installation,
+   tick **Add Python to PATH**.
+2. Copy the `ifp-classroom` folder to the PC, e.g. `C:\IFPClassroom`.
+3. Open `windows`, right-click **`install_windows_server.bat`** and choose
+   **Run as administrator**. The script:
+   - installs the app;
+   - makes the server start automatically whenever Windows starts, even
+     before anyone signs in;
+   - opens TCP port **8000** in Windows Firewall, for private and domain
+     networks;
+   - schedules a daily database backup at 17:30 into `data\backups`.
+4. When it finishes, it shows the PC's address, e.g. `http://192.168.1.10:8000`.
+   Open it in a browser and sign in as **admin / admin**. **Change the password
+   straight away** under Settings.
+5. **Give the PC a fixed IP address** (DHCP reservation in the router, or a
+   static IP in Windows). The panels use this address to find the server.
+6. Keep the PC switched on during school hours. Set Windows **Sleep** to
+   *Never* when plugged in. If the PC is off, the panels keep their records
+   and send them when it is back.
 
-> **Tip:** Android Chrome only gives a web page the camera when the page is
-> **HTTPS**. If your server already has an `https://` address (hosted online,
-> or behind a reverse proxy with a certificate), the panel works with no extra
-> step. On a plain `http://` LAN server, do the one-time Chrome flag in step 3.
+All data lives in `ifp-classroom\data`: the database, backups and logs. To
+uninstall, run `windows\uninstall_windows_server.bat` as administrator. The
+`data` folder is kept.
 
-## 2. Set up classrooms and people (on your PC)
+If the panels cannot connect, check that the Windows network profile is
+**Private**, not Public. Any other firewall or antivirus product must also
+allow port 8000.
 
-1. Sign in as admin. Open **Classroom → Classrooms**.
-2. **Add classroom** for each room with a panel, e.g. `Class 8-A`.
-3. Optional: add **timetable periods**. The register then shows who was present in each period.
-4. Under **Weekly off**, tick the school's weekly off days. Add holidays on the **Holidays** page.
-5. Open **Students & Teachers**. Add people one at a time, or **Import from CSV** with these columns:
+## 2. Set up classrooms and people (in the browser on your PC)
+
+1. Open **Classrooms** and click **Add classroom** for each room with a panel,
+   e.g. `Class 8-A`. Each room gets a **kiosk link**.
+2. Optional: add **timetable periods**. The register then shows attendance per
+   period, and Analytics counts **late arrivals**: first seen more than *N*
+   minutes after the first period starts.
+3. In **Recognition settings**, tick the school's **weekly off** days. Add
+   holidays on the **Holidays** page.
+4. Open **Students & Teachers**. Add people one at a time, or **Import from CSV**
+   with these columns:
 
    | Number | Name | Role | Class | Classroom | Active |
    |---|---|---|---|---|---|
@@ -54,101 +72,103 @@ be able to open its address, e.g. `http://192.168.1.10:8000`.
    register when the camera does not see them. Teachers can be left without a
    room: they appear in the register of any room they are seen in.
 
-6. **Add face photos.** A panel only recognises people who have at least one face photo.
-   * **Bulk:** open **Bulk face photos** and select many photos at once. Each
+5. **Add face photos.** A panel only recognises people who have at least one
+   face photo.
+   - **Bulk:** open **Bulk face photos** and select many photos at once. Each
      file is named after the person's number: `S1023.jpg`. Extra photos of the
      same person are named `S1023_2.jpg`. ID-card photos work.
-   * **One person:** on their page, click **Upload photos** or **Use camera**.
-   * 2–5 photos per person gives the best results. One of them should ideally
-     come from the classroom panel itself: sign in on the panel's browser, open
-     the person's page and use **Use camera**.
+   - **One person:** on their page, use **Upload photos** or **Use camera**.
+   - 2–5 photos per person gives the best results.
 
-Photos are processed in the browser. The server stores only the face data (128
-numbers) and a small thumbnail, never the original photo.
+   Photos are processed in the browser. The server stores only the face data
+   (128 numbers) and a small thumbnail.
 
-## 3. Set up each Android panel (one time, about 5 minutes)
+## 3. Install the app on each Android panel (about 5 minutes per panel)
 
-1. **Install Google Chrome** if the panel does not have it, from Play Store or
-   the panel's app store. Older built-in browsers may not support the camera
-   or the face models.
-2. **Plain `http://` server only:** allow the camera for your server.
-   1. In Chrome, open `chrome://flags`.
-   2. Search for **Insecure origins treated as secure**.
-   3. Enter the server address exactly, e.g. `http://192.168.1.10:8000`.
-   4. Set it to **Enabled** and tap **Relaunch**.
-3. On your PC, copy the room's **kiosk link** from **Classrooms**. Open it in
-   Chrome on that room's panel. When asked, tap **Allow** for the camera.
-4. In the Chrome menu, tap **Add to Home screen**. The kiosk then opens like an
-   app.
-5. In the panel's settings, turn off **screen sleep / auto power-off** during
-   school hours. The kiosk also asks the panel to keep the screen on.
-6. If the panel has more than one camera, choose the right one in the dropdown
-   at the bottom right. The choice is remembered.
+1. On the panel, open the panel's browser and go to `http://<PC-IP>:8000/app`,
+   e.g. `http://192.168.1.10:8000/app`. Tap **Download the app**.
+2. Open the downloaded file. If Android asks, allow **Install unknown apps**
+   for the browser or file manager, then tap **Install**.
+3. Open **IFP Classroom**.
+4. Type or paste **that room's kiosk link**, copied from the Classrooms page.
+5. Tap **Test connection**. It should say *Connected ✓* with the room name.
+6. Set the options:
+   - **Open automatically when the panel is switched on** (recommended).
+   - **Keep recognising while another app is on screen**: see *During lessons*
+     below.
+   - **Settings PIN**: stops students from changing the room.
+7. Tap **Save and start**, then allow the camera.
 
-### Keeping it running alongside lessons
+On Android 10 and later, also tap **Allow "Display over other apps"** in the
+setup screen. Android needs this before an app can open itself at power-on.
+Many panels also have their own *Boot app / Start-up app* setting; set it to
+IFP Classroom if available.
 
-**Android switches the camera off for any app that is not on screen.** While a
-teacher uses the whiteboard or another app full screen, the kiosk cannot see,
-so nobody is recorded. Ways to handle this, best first:
+To change the room later, tap **⚙ App settings** on the kiosk screen, then
+enter the PIN if one is set. To update the app, download and install it again
+from `/app`. Settings are kept.
 
-1. **Split screen or floating window.** Most Android 10+ panels can show two
-   apps side by side or as a small pop-up window. Tap **Compact** on the kiosk
-   and keep it in a corner window next to the lesson app. Both stay active.
-2. **Roll call at the start of each period.** Keep the kiosk full screen for
-   the first 2–3 minutes, then switch to the lesson. Entries are recorded.
-   Exits are recorded as the last time each person was seen. Set the room's
-   *Exit after unseen for* to the length of a period (e.g. 40 minutes) so
-   pupils are not marked as having left mid-lesson.
-3. **Kiosk-browser app.** Apps such as Fully Kiosk Browser can start the kiosk
-   link when the panel boots, keep the screen on and grant camera permission.
-   Check its licence terms for school use.
+### During lessons
 
-When the kiosk returns to the screen it restarts the camera by itself. Records
-from before are kept.
+Android limits camera use by an app that is not on screen. The app asks
+Android to keep the camera running, using a foreground service with a
+"Classroom attendance is running" notification. How much Android allows
+depends on the panel's Android version and manufacturer, so **test it on your
+panel model**:
+
+1. Open the app and let it recognise someone.
+2. Switch to the whiteboard app for 5 minutes and walk in front of the camera.
+3. Open **Entry / Exit Log** on the server PC and check that you were recorded.
+
+If that doesn't work on your panel model, use one of these:
+
+* **Split screen or floating window.** Show the app beside the lesson; tap
+  **Compact** for a smaller layout.
+* **Roll call.** Keep the app on screen for the first 2–3 minutes of each
+  period. Set the room's *Exit after unseen for* to the length of a period
+  (e.g. 40 minutes) so students are not marked as leaving mid-lesson.
 
 ### Camera and accuracy tips
 
-* Faces must be visible and lit. A panel camera (usually 1080p or 4K,
-  wide-angle, above the screen) reliably recognises faces up to about 5–6
-  metres. The back rows of a large room may be missed. Check the room by
-  watching the boxes on the kiosk.
-* On an older panel, set **Face detector** to *Fast* under **Classrooms →
-  Recognition settings**. The kiosk also switches itself to *Fast* when the
-  accurate detector is too slow for that panel.
+* A panel camera (1080p or 4K, wide-angle) reliably recognises faces up to
+  about 5–6 metres. Back rows of a large room may be missed. Watch the boxes
+  on the kiosk screen to check coverage.
+* On an older panel, set **Face detector** to *Fast*. The app also switches
+  itself to *Fast* when the accurate detector is too slow for that panel.
 * If two people get mixed up, lower **Match strictness** (e.g. 0.45) and add
-  more photos of both. If people are often not recognised, raise it a little
+  more photos of both. If people are often not recognised, raise it slightly
   (0.55) or add a photo taken by that panel.
 * Panels pick up new people, photos and settings within 5 minutes.
 
-## 4. Viewing the records on your PC
-
-Open the server address in any browser on your PC and sign in.
+## 4. Analysing the data (on the server)
 
 | Page | What it shows | Download |
 |---|---|---|
+| **Analytics** | average attendance, daily attendance chart, class-wise %, students below the threshold (default 75%), late arrivals, teacher time in classrooms, room usage; for this week / month / last 30 days / academic year / any dates, per class | Students, daily and teacher CSVs |
 | **Classrooms** | each panel online/offline, who is in class now, present today | |
-| **Class Register** | per room and day: present/absent, first entry, last exit, time in class, number of entries, per-period P/A | Excel, CSV, Print |
-| **Entry / Exit Log** | every entry and exit with time, room and person; filter by room or person | CSV |
-| **Monthly Register** | P/A/H/WO grid per student for the month, totals and attendance % | Excel, CSV |
-| **Students & Teachers** → person | their face photos and entries/exits on any day | |
+| **Class Register** | per room and day: present/absent, first entry, last exit, time in class, per-period P/A | Excel, CSV, print |
+| **Entry / Exit Log** | every entry and exit with time, room and person | CSV |
+| **Monthly Register** | P/A/H/WO grid per student, totals and % | Excel, CSV |
 
-Class teachers and the principal can get **viewer** logins (Settings → Users & logins). Viewers see all
-reports but cannot change anything.
+Give the principal and class teachers **viewer** logins (Settings → Users &
+logins). Viewers can see every report but cannot change anything. Any PC or
+phone on the school network can open `http://<PC-IP>:8000`.
 
 ## 5. Privacy and limits (please read)
 
 * **Consent.** This system processes biometric data of children. Under India's
   Digital Personal Data Protection Act 2023, the school must obtain verifiable
-  consent from a parent or guardian, and must tell staff and parents what is
-  collected and why. Do not enrol anyone without consent.
-* **What is stored:** face data (numbers), a small face thumbnail and the times
-  each person was seen. Deleting a person removes all of these. Delete
-  students who leave the school.
-* **The kiosk link is a password.** Anyone with it can download the room's
-  face data. Share it only with the panel. Click **New link** to cancel an old
-  one.
-* **Not proof against spoofing.** A clear photo of a student held up to the
-  camera can be recognised as that student. Treat the register as attendance
-  support, not a security control.
+  consent from a parent or guardian. It must also tell staff and parents what
+  is collected and why. Do not enrol anyone without consent.
+* **What is stored**, on the server PC only: face data (numbers), a small face
+  thumbnail and the times each person was seen. Deleting a person removes all
+  of these. Delete students who leave. The backups contain the same data, so
+  keep them safe.
+* **The kiosk link is a password.** Anyone with it can download that room's
+  face data. Click **New link** on the Classrooms page to cancel an old one,
+  then enter the new link in that panel's app.
+* **Not proof against spoofing.** A clear photo held up to the camera can be
+  recognised as that person. Treat the register as attendance support, not a
+  security control.
 * Recognition is not perfect. Teachers should glance at the register, and
-  absent marks should be checked before any action is taken on them.
+  absent marks should be checked before any action is taken.

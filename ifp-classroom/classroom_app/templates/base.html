@@ -13,6 +13,7 @@
     {% set ep = request.endpoint %}
     <nav class="nav">
       <a href="{{ url_for('classroom.overview') }}" class="{{ 'active' if ep == 'classroom.overview' }}">Classrooms</a>
+      <a href="{{ url_for('classroom.analytics') }}" class="{{ 'active' if ep == 'classroom.analytics' }}">Analytics</a>
       <div class="sep">Attendance</div>
       <a href="{{ url_for('classroom.register') }}" class="{{ 'active' if ep == 'classroom.register' }}">Class Register</a>
       <a href="{{ url_for('classroom.movements') }}" class="{{ 'active' if ep == 'classroom.movements' }}">Entry / Exit Log</a>

@@ -21,7 +21,7 @@
   <h2>Classrooms and their panels</h2>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Classroom</th><th>Panel</th><th class="num">In class now</th><th class="num">Present today</th><th>Leaves after</th><th>Kiosk link (open this on the IFP)</th><th></th></tr></thead>
+    <thead><tr><th>Classroom</th><th>Panel</th><th class="num">In class now</th><th class="num">Present today</th><th>Leaves after</th><th>Kiosk link (enter this in the panel app)</th><th></th></tr></thead>
     <tbody>
     {% for r in rooms %}
       <tr>
@@ -70,6 +70,12 @@
   {% endif %}
 </div>
 
+<div class="card">
+  <h2>Panel app (Android)</h2>
+  <p class="small">On each classroom panel, open <b>{{ url_for('classroom.panel_app', _external=True) }}</b> in the panel's browser, install the app, then paste that room's kiosk link (above) into it. The app works on plain <code>http://</code>: no Chrome settings are needed.</p>
+  <a class="btn" href="{{ url_for('classroom.panel_app') }}">Open the app download page</a>
+</div>
+
 <div class="grid grid-2">
   <div class="card">
     <h2>Timetable periods</h2>
@@ -107,6 +113,11 @@
           <option value="tiny" {{ 'selected' if settings.class_detector == 'tiny' }}>Fast (for slower panels)</option>
         </select>
       </label>
+      <label>Late after first period starts (minutes)
+        <input type="number" min="0" max="120" name="class_late_grace" value="{{ settings.class_late_grace }}" {{ 'disabled' if user.role != 'admin' }}>
+        <span class="small muted" style="font-weight:400">Needs timetable periods. Used on the Analytics page.</span></label>
+      <label>Flag students below (attendance %)
+        <input type="number" min="1" max="100" name="class_low_attendance" value="{{ settings.class_low_attendance }}" {{ 'disabled' if user.role != 'admin' }}></label>
       <div class="full"><div class="small muted" style="font-weight:600">School weekly off</div>
         <div class="days-pick">{% for d in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
           <label class="check"><input type="checkbox" name="off_{{ loop.index0 }}" {{ 'checked' if loop.index0|string in offs }} {{ 'disabled' if user.role != 'admin' }}> {{ d }}</label>{% endfor %}</div>
@@ -121,7 +132,7 @@
   <h2>How it works</h2>
   <ol class="small">
     <li>Add each classroom here. Add students and teachers under <a href="{{ url_for('classroom.people') }}">Students &amp; Teachers</a> (one by one or from a CSV), and give each one or more face photos.</li>
-    <li>On each Android panel, open that room's kiosk link in Chrome and allow the camera (setup steps: <code>docs/SETUP.md</code>). Android turns the camera off for apps in the background, so keep the kiosk visible: full screen at the start of the class, or in split screen / a floating window beside the lesson.</li>
+    <li>On each Android panel, install the <b>IFP Classroom</b> app (see "Panel app" above), enter that room's kiosk link and allow the camera. The app starts when the panel is switched on. Full steps: <code>docs/SETUP.md</code>.</li>
     <li>The panel recognises faces itself and sends "seen" records to this server. Someone's <b>entry</b> is the first time they are seen; their <b>exit</b> is recorded once they have not been seen for the minutes set for that room.</li>
     <li>View and download the class register, entry/exit log and monthly register from any PC in the school.</li>
   </ol>

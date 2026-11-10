@@ -199,7 +199,8 @@ def test_settings_and_periods(logged_in, conn):
     logged_in.post("/classroom/settings", data={"class_match_threshold": "0.9", "class_detector": "tiny",
                                                 "off_5": "on", "off_6": "on", "csrf_token": t})
     s = dict(conn.execute("SELECT key, value FROM settings WHERE key LIKE 'class_%'").fetchall())
-    assert s == {"class_match_threshold": "0.70", "class_detector": "tiny", "class_weekly_off": "5,6"}
+    assert s == {"class_match_threshold": "0.70", "class_detector": "tiny", "class_weekly_off": "5,6",
+                 "class_late_grace": "10", "class_low_attendance": "75"}
     logged_in.post("/classroom/periods", data={"name": "P1", "start_time": "10:00", "end_time": "09:00", "csrf_token": t})
     logged_in.post("/classroom/periods", data={"name": "P1", "start_time": "09:00", "end_time": "09:40", "csrf_token": t})
     assert conn.execute("SELECT name, start_time, end_time FROM class_periods").fetchall()[0][:] == ("P1", "09:00", "09:40")
@@ -222,3 +223,55 @@ def test_viewer_can_view_but_not_change(app, logged_in, conn):
     assert conn.execute("SELECT COUNT(*) FROM classrooms").fetchone()[0] == 0
     anon = app.test_client()
     assert anon.get("/classroom/register").status_code == 302
+
+
+# ------------------------------------------------------------- analytics ---
+def test_analytics_numbers(school):
+    school.execute("INSERT INTO class_periods (name, start_time, end_time) VALUES ('P1', '09:00', '09:40')")
+    school.execute("UPDATE classrooms SET absence_minutes = 10")
+    school.commit()
+    # Mon 2 Nov, Tue 3 Nov, Wed 4 Nov are school days; Sunday 1 Nov is a weekly off
+    seen(school, 1, "2026-11-02 08:55:00")
+    seen(school, 1, "2026-11-03 09:20:00")          # late (after 09:10)
+    seen(school, 2, "2026-11-02 09:05:00")
+    for m in range(0, 31, 5):
+        seen(school, 3, f"2026-11-02 09:{m:02d}:00")  # teacher: 30 minutes in class
+    seen(school, 1, "2026-11-01 10:00:00")          # Sunday: ignored
+    data = cl.analytics(school, date(2026, 11, 1), date(2026, 11, 30), now=datetime(2026, 11, 4, 18))
+    assert [d.isoformat() for d in data["days"]] == ["2026-11-02", "2026-11-03", "2026-11-04"]
+    st = {r["person"]["person_no"]: r for r in data["students"]}
+    assert st["S1"]["present"] == 2 and st["S1"]["late"] == 1 and st["S1"]["percent"] == 66.7 and st["S1"]["low"]
+    assert st["S2"]["present"] == 1 and st["S2"]["percent"] == 33.3
+    assert [d["present"] for d in data["daily"]] == [2, 1, 0]
+    assert data["overall"] == 50.0 and data["low_count"] == 2 and data["late_count"] == 1
+    assert data["classes"][0]["name"] == "8-A" and data["classes"][0]["percent"] == 50.0
+    assert data["teachers"][0]["minutes"] == 30 and data["teachers"][0]["days"] == 1
+    assert data["rooms"][0]["room"]["name"] == "8-A" and data["rooms"][0]["avg_people"] == 2.0
+
+
+def test_analytics_page_and_exports(logged_in, school):
+    seen(school, 1, f"{date.today()} 00:00:01")
+    for rng in ("week", "month", "30", "year"):
+        assert logged_in.get(f"/classroom/analytics?range={rng}").status_code == 200
+    page = logged_in.get("/classroom/analytics?start=2026-01-01&end=2026-12-31&class_name=8-A").get_data(as_text=True)
+    assert "Asha" in page and "By class" in page
+    csv_out = logged_in.get("/classroom/analytics?export=students").get_data(as_text=True)
+    assert csv_out.startswith("Number,Name,Class,Days present") and "Ravi" in csv_out
+    assert "Mrs Iyer" in logged_in.get("/classroom/analytics?export=teachers").get_data(as_text=True)
+    assert logged_in.get("/classroom/analytics?export=daily").get_data(as_text=True).startswith("Date,")
+
+
+def test_kiosk_api_allows_app_origin(client, school):
+    r = client.options("/api/class/tok8a/sightings", headers={"Origin": "https://appassets.androidplatform.net",
+                                                              "Access-Control-Request-Method": "POST"})
+    assert r.status_code in (200, 204) and r.headers["Access-Control-Allow-Origin"] == "*"
+    r = client.get("/api/class/tok8a/roster", headers={"Origin": "https://appassets.androidplatform.net"})
+    assert r.headers["Access-Control-Allow-Origin"] == "*"
+    assert "Access-Control-Allow-Origin" not in client.get("/login").headers
+
+
+def test_panel_app_download_page_needs_no_login(client):
+    page = client.get("/app").get_data(as_text=True)
+    assert "Download the app" in page and "ifp-classroom.apk" in page
+    apk = client.get("/static/app/ifp-classroom.apk")
+    assert apk.status_code == 200 and apk.data[:2] == b"PK"

@@ -90,6 +90,8 @@
     });
     state.matcher = labelled.length ? new faceapi.FaceMatcher(labelled, state.threshold) : null;
     document.getElementById('total').textContent = data.persons.length + ' enrolled';
+    var roomEl = document.querySelector('.room');
+    if (roomEl && data.classroom && data.classroom.name) roomEl.textContent = data.classroom.name;
     if (fresh) {
       // who the server already has in class (e.g. after a reload), so they are not shown as new entries
       var now = Date.now();

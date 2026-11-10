@@ -10,6 +10,8 @@ DEFAULT_SETTINGS = {
     "class_match_threshold": "0.5",  # max face-descriptor distance for a match (lower = stricter)
     "class_detector": "ssd",         # ssd (accurate, small/far faces) | tiny (fast, weaker hardware)
     "class_weekly_off": "6",         # weekly-off weekdays, Mon=0 .. Sun=6, comma separated
+    "class_late_grace": "10",        # minutes after the first period starts before an arrival is late
+    "class_low_attendance": "75",    # % below which a student is flagged on the Analytics page
 }
 
 # schema.sql is the version-1 baseline and must never change. To change the

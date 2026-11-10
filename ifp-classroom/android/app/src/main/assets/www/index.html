@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IFP Classroom</title>
+  <link rel="stylesheet" href="kiosk.css">
+  <style>
+    #app-settings { position: absolute; right: 12px; bottom: 12px; z-index: 4; opacity: .55; }
+    #app-settings:hover, #app-settings:focus { opacity: 1; }
+  </style>
+</head>
+<!-- Runs inside the IFP Classroom Android app. The kiosk code (kiosk.js,
+     faces.js, kiosk.css, face models) is copied from the server project at
+     build time, so the app and the server's /kiosk/ page behave the same. -->
+<body data-face-models="model">
+<div class="wrap">
+  <div class="stage">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
+    <div class="top"><div class="room">Classroom</div><div class="clock" id="clock"></div></div>
+    <div class="msg" id="msg"><div>Starting the classroom camera…</div></div>
+    <button id="app-settings" type="button" title="App settings">⚙ App settings</button>
+  </div>
+  <div class="side">
+    <h2><span>In class now</span><span id="total"></span></h2>
+    <div class="count" id="count">0</div>
+    <div class="grow"><div class="list" id="present"></div></div>
+    <h2>Entries &amp; exits</h2>
+    <div class="grow" style="flex:.8"><div class="list" id="events"></div></div>
+    <div class="foot">
+      <div id="status">Loading…</div>
+      <div class="btns">
+        <select id="camera" title="Camera"></select>
+        <button id="fs" type="button" hidden>Full screen</button>
+        <button id="compact" type="button">Compact</button>
+        <button id="boxes" type="button">Hide boxes</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  // Server address and classroom link come from the app's settings screen.
+  window.KIOSK = JSON.parse(window.AndroidKiosk ? AndroidKiosk.config() : '{}');
+  document.getElementById('app-settings').onclick = function () { if (window.AndroidKiosk) AndroidKiosk.openSettings(); };
+</script>
+<script src="face-api.js"></script>
+<script src="faces.js"></script>
+<script src="kiosk.js"></script>
+</body>
+</html>
