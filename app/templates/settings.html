@@ -122,5 +122,20 @@
   </form>
   <form method="post" style="margin-top:10px">{{ csrf() }}<input type="hidden" name="form" value="send_report"><button class="btn" type="submit">{{ _("Send today's summary now") }}</button></form>
 </div>
+<div class="card">
+  <h2>{{ _("Mobile app") }}</h2>
+  <p>{{ _("This system installs on phones like an app: an icon on the home screen that opens full-screen. Share the website address with your staff.") }}</p>
+  <div class="grid grid-2">
+    <div><b>Android</b><ol class="small"><li>{{ _("Open the website in Chrome and sign in.") }}</li><li>{{ _("Tap “Install app” in the menu (or ⋮ → Install app / Add to Home screen).") }}</li></ol></div>
+    <div><b>iPhone / iPad</b><ol class="small"><li>{{ _("Open the website in Safari and sign in.") }}</li><li>{{ _("Tap Share (□↑) → Add to Home Screen.") }}</li></ol></div>
+  </div>
+  <p class="muted small">{{ _("Installing needs HTTPS (the padlock in the address bar). To publish on Google Play, follow docs/MOBILE_APP.md and paste the asset links JSON it gives you here.") }}</p>
+  <form method="post">
+    {{ csrf() }}<input type="hidden" name="form" value="mobile">
+    <label class="form-grid"><span class="muted small"><b>assetlinks.json</b> ({{ _("Google Play only, optional") }})</span>
+      <textarea name="android_assetlinks" rows="4" style="font-family:monospace;font-size:12px" placeholder='[{"relation": ["delegate_permission/common.handle_all_urls"], ...}]'>{{ settings.android_assetlinks }}</textarea></label>
+    <button class="btn" type="submit" style="margin-top:8px">{{ _("Save") }}</button>
+  </form>
+</div>
 {% endif %}
 {% endblock %}

@@ -1210,6 +1210,17 @@ def settings():
                 _audit("user.delete", target["username"])
                 db.commit()
                 flash("User deleted.", "success")
+        elif form == "mobile":
+            raw = request.form.get("android_assetlinks", "").strip()
+            try:
+                if raw and not isinstance(json.loads(raw), list):
+                    raise ValueError
+                dbmod.set_setting(db, "android_assetlinks", raw)
+                _audit("settings.mobile", "asset links updated")
+                db.commit()
+                flash("Mobile app settings saved.", "success")
+            except ValueError:
+                flash("Paste the assetlinks.json content exactly as given (a JSON list starting with [).", "error")
         elif form == "regen_bridge":
             dbmod.set_setting(db, "bridge_token", secrets.token_urlsafe(24))
             _audit("settings.bridge_token", "regenerated")

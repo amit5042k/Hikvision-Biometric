@@ -1,0 +1,24 @@
+  <meta name="theme-color" content="#c8102e">
+  <link rel="manifest" href="{{ url_for('pwa.manifest') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='icons/favicon-32.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Attendance">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () { navigator.serviceWorker.register('{{ url_for('pwa.service_worker') }}', { scope: '/' }).catch(function () {}); });
+    }
+    // "Install app" button: shown when the browser offers installation (Android / desktop Chrome, Edge)
+    var deferredInstall = null;
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault(); deferredInstall = e;
+      document.querySelectorAll('.install-app').forEach(function (b) { b.hidden = false; });
+    });
+    function installApp() {
+      if (!deferredInstall) return;
+      deferredInstall.prompt();
+      deferredInstall.userChoice.finally(function () { deferredInstall = null; document.querySelectorAll('.install-app').forEach(function (b) { b.hidden = true; }); });
+    }
+  </script>

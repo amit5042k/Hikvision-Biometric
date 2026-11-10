@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#c8102e">
+  <title>Offline · {{ company_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-box" style="text-align:center">
+    <img src="{{ url_for('static', filename='icons/icon-192.png') }}" alt="" width="96" height="96" style="border-radius:22px">
+    <h1 style="margin-top:16px">You are offline</h1>
+    <p class="muted">The attendance app needs an internet connection. Check your mobile data or Wi-Fi and try again.</p>
+    <p class="muted">आप ऑफ़लाइन हैं। इंटरनेट कनेक्शन जाँचें और फिर से कोशिश करें।</p>
+    <button class="btn primary" onclick="location.reload()" style="justify-content:center">Try again / फिर से कोशिश करें</button>
+  </div>
+</div>
+</body>
+</html>

@@ -38,8 +38,9 @@ def create_app(test_config=None):
     dbmod.init_db(app.config["DATABASE"], app.config["BACKUP_DIR"])
     app.teardown_appcontext(dbmod.close_db)
 
-    from . import bridge_api, i18n, portal, routes, twofactor
+    from . import bridge_api, i18n, portal, pwa, routes, twofactor
     app.register_blueprint(routes.bp)
+    app.register_blueprint(pwa.bp)
     app.register_blueprint(i18n.bp)
     app.register_blueprint(twofactor.bp)
     app.register_blueprint(bridge_api.bp)
@@ -62,8 +63,7 @@ def create_app(test_config=None):
                 session.pop("user_id", None)  # the account was deleted
         g.lang = i18n.current_language()
         # Admins may be required to set up two-factor sign-in before anything else.
-        if g.user is not None and request.endpoint not in ("twofactor.manage", "main.logout", "static",
-                                                            "i18n.set_language"):
+        if g.user is not None and request.endpoint not in PUBLIC_ENDPOINTS | {"twofactor.manage", "main.logout"}:
             from .twofactor import setup_required
             if setup_required(g.user):
                 flash("Administrators must turn on two-factor sign-in before continuing.", "warning")
@@ -94,12 +94,18 @@ def create_app(test_config=None):
     return app
 
 
+# Reachable by anyone, signed in or not (app shell, language switch).
+PUBLIC_ENDPOINTS = {
+    "static", "i18n.set_language", "pwa.manifest", "pwa.service_worker", "pwa.offline", "pwa.assetlinks",
+    "pwa.favicon",
+}
+
 # Endpoints an employee (self-service) login can reach; everything else is staff-only.
-EMPLOYEE_ENDPOINTS = {
-    "static", "main.login", "main.logout", "main.settings",
+EMPLOYEE_ENDPOINTS = PUBLIC_ENDPOINTS | {
+    "main.login", "main.logout", "main.settings",
     "portal.my_attendance", "portal.my_leave", "portal.my_leave_cancel",
     "portal.my_corrections", "portal.my_correction_cancel",
-    "twofactor.manage", "twofactor.login_code", "i18n.set_language",
+    "twofactor.manage", "twofactor.login_code",
 }
 
 

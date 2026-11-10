@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ _("Attendance") }}{% endblock %} · {{ company_name }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% include "_head.html" %}
 </head>
 <body>
 <div class="layout">
@@ -36,6 +37,7 @@
       {% if user and user.role == 'admin' %}<a href="{{ url_for('main.audit_log') }}" class="{{ 'active' if ep == 'main.audit_log' }}">{{ _("Audit Log") }}</a>{% endif %}
       {% endif %}
     </nav>
+    <div style="padding:0 16px"><button type="button" class="btn sm install-app" hidden onclick="installApp()" style="width:100%;justify-content:center">📱 {{ _("Install app") }}</button></div>
     <div class="lang-switch">{% for code, name in LANGUAGES.items() %}<a href="{{ url_for('i18n.set_language', code=code) }}" class="{{ 'on' if code == lang }}">{{ name }}</a>{% endfor %}</div>
     {% if user %}
     <div class="side-foot">

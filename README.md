@@ -37,6 +37,17 @@ It pulls punches from the terminal over the LAN, applies shifts, holidays and le
 - **Approvals**: admins approve or reject leave and correction requests from the **Requests** page. An approved correction adds the punch automatically.
 - **Audit log** of admin actions: who changed what, and when. Searchable and exportable.
 - **Daily email summary**: present, absent, late, on-leave, pending requests and device problems, sent over SMTP at a set time.
+- **Shift roster**:
+  - A weekly grid sets each person's shift or rest day per date.
+  - A rotation generator repeats patterns such as Morning, Evening, Night, with optional staggering. You can also copy last week.
+  - Attendance follows the roster, and a punch is never counted twice when shifts change between days.
+- **Multiple offices**:
+  - Employees and terminals belong to an office.
+  - Every report, the roster and the dashboard can be filtered by office.
+  - Each office can have its own bridge PC and token, which only sees that office's terminals.
+- **Two-factor sign-in**: authenticator-app codes (TOTP) with QR setup and one-time recovery codes. It can be made mandatory for admins.
+- **Hindi interface**: switch between English and हिन्दी from the sidebar or the login page. The choice is remembered per user, with a company default.
+- **Mobile app**: the site installs on Android and iPhone as an app with a home-screen icon, full-screen, and an offline page. It can also be published to Google Play; see [docs/MOBILE_APP.md](docs/MOBILE_APP.md).
 - **Users and security**:
   - Admin, viewer and employee roles; admins can reset passwords and change roles. The last admin cannot be removed.
   - Sign-in lockout after repeated failures, CSRF-protected forms.

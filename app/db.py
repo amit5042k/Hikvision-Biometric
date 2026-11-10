@@ -27,6 +27,7 @@ DEFAULT_SETTINGS = {
     "report_last_sent": "",
     "require_2fa_admins": "0",       # 1 = administrators must set up two-factor sign-in
     "default_language": "en",        # en | hi
+    "android_assetlinks": "",        # Digital Asset Links JSON for a Google Play (TWA) build
 }
 
 # Schema changes after the first release.
