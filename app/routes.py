@@ -5,6 +5,7 @@ import io
 import json
 import secrets
 import sqlite3
+import time
 from calendar import monthrange
 from datetime import date, datetime, timedelta
 
@@ -88,6 +89,13 @@ def login():
             return render_template("login.html"), 429
         user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
         if user and check_password_hash(user["password_hash"], request.form.get("password", "")):
+            if user["totp_enabled"]:  # password was right; now ask for the authenticator code
+                token = session.get("csrf_token")
+                session.clear()
+                session.update({"2fa_user": user["id"], "2fa_at": time.time(), "2fa_next": request.args.get("next")})
+                if token:
+                    session["csrf_token"] = token
+                return redirect(url_for("twofactor.login_code"))
             db.execute("DELETE FROM login_attempts WHERE username = ?", (username,))
             dbmod.audit(db, username, "login", request.remote_addr or "")
             db.commit()
@@ -1119,6 +1127,7 @@ def settings():
                         if key in NUMERIC_SETTINGS:
                             value = "%g" % float(value)
                         dbmod.set_setting(db, key, value)
+                dbmod.set_setting(db, "require_2fa_admins", "1" if request.form.get("require_2fa_admins") else "0")
                 _audit("settings.general", "saved")
                 db.commit()
                 flash("Settings saved.", "success")
@@ -1156,6 +1165,14 @@ def settings():
             error = _create_user(db, request.form.get("username", "").strip(), request.form.get("password", ""),
                                  request.form.get("role"), _int(request.form.get("employee_id")))
             flash(error or "User created.", "error" if error else "success")
+        elif form == "reset_2fa":
+            target = db.execute("SELECT * FROM users WHERE id = ?", (_int(request.form.get("user_id")),)).fetchone()
+            if target:
+                db.execute("UPDATE users SET totp_enabled = 0, totp_secret = NULL, recovery_codes = NULL, "
+                           "totp_last_step = NULL WHERE id = ?", (target["id"],))
+                _audit("user.2fa_reset", target["username"])
+                db.commit()
+                flash(f"Two-factor sign-in turned off for {target['username']}. They can set it up again.", "success")
         elif form in ("set_role", "reset_password", "delete_user"):
             uid = _int(request.form.get("user_id"))
             target = db.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
@@ -1200,7 +1217,8 @@ def settings():
     return render_template("settings.html", settings=dbmod.get_settings(db), roles=ROLES,
                            schema_version=db.execute("PRAGMA user_version").fetchone()[0],
                            server_url=request.host_url.rstrip("/"),
-                           users=db.execute("SELECT u.id, u.username, u.role, u.created_at, e.name AS employee_name, "
+                           users=db.execute("SELECT u.id, u.username, u.role, u.created_at, u.totp_enabled, "
+                                            "e.name AS employee_name, "
                                             "e.employee_no FROM users u LEFT JOIN employees e ON e.id = u.employee_id "
                                             "ORDER BY u.role, u.username").fetchall(),
                            employees_without_login=db.execute(

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Two-factor sign-in{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Two-factor sign-in</h1><div class="muted">A code from your phone is asked for after your password, so a stolen password alone is not enough.</div></div></div>
+
+{% if codes %}
+<div class="card" style="border-color:var(--warn)">
+  <h2>Your recovery codes</h2>
+  <p>Each code works <b>once</b> if you lose your phone. Print them or store them somewhere safe — they will not be shown again.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin:12px 0">
+    {% for c in codes %}<code style="font-size:15px;padding:6px 10px;text-align:center">{{ c }}</code>{% endfor %}
+  </div>
+  <button class="btn" onclick="window.print()">Print</button>
+</div>
+{% endif %}
+
+{% if user_row.totp_enabled %}
+<div class="card">
+  <h2>Status: <span class="badge s-approved">On</span></h2>
+  <p class="muted">Recovery codes left: <b>{{ remaining }}</b>.</p>
+  <form method="post" class="filters">
+    {{ csrf() }}
+    <label>Your password<input type="password" name="password" required autocomplete="current-password"></label>
+    <label>Current code<input name="code" inputmode="numeric" maxlength="6" required></label>
+    <button class="btn" type="submit" name="action" value="new_codes">New recovery codes</button>
+    {% if not required %}<button class="btn danger" type="submit" name="action" value="disable">Turn off</button>{% endif %}
+  </form>
+  {% if required %}<p class="muted small">Administrators are required to keep two-factor sign-in on.</p>{% endif %}
+</div>
+{% elif pending %}
+<div class="card">
+  <h2>Step 1 — Scan this QR code</h2>
+  <div class="grid grid-2" style="align-items:center">
+    <div style="text-align:center;background:#fff;padding:10px;border-radius:8px">{{ qr }}</div>
+    <div>
+      <p>Open an authenticator app (Google Authenticator, Microsoft Authenticator, Authy…) and add an account by scanning the code.</p>
+      <p class="muted small">Can't scan? Enter this key by hand (time-based):<br><code style="font-size:13px;word-break:break-all">{{ pending }}</code></p>
+    </div>
+  </div>
+  <h2 style="margin-top:16px">Step 2 — Enter the 6-digit code it shows</h2>
+  <form method="post" class="filters">
+    {{ csrf() }}<input type="hidden" name="action" value="confirm">
+    <label>Code<input name="code" inputmode="numeric" maxlength="6" required autofocus autocomplete="one-time-code"></label>
+    <button class="btn primary" type="submit">Turn on</button>
+  </form>
+</div>
+{% else %}
+<div class="card">
+  <h2>Status: <span class="badge">Off</span></h2>
+  {% if required %}<div class="flash warning">Your administrator account must use two-factor sign-in.</div>{% endif %}
+  <p>You will need a phone with an authenticator app. Setup takes about a minute.</p>
+  <form method="post">{{ csrf() }}<input type="hidden" name="action" value="start"><button class="btn primary" type="submit">Set up two-factor sign-in</button></form>
+</div>
+{% endif %}
+{% endblock %}

@@ -18,6 +18,7 @@
       <label>Minimum overtime (minutes)<input type="number" min="0" name="ot_min_minutes" value="{{ settings.ot_min_minutes }}"></label>
       <label>Push endpoint token<input name="push_token" value="{{ settings.push_token }}" placeholder="optional">
         <span class="muted small" style="font-weight:400">Recommended when hosted online. When set, device pushes must include ?token=…; when empty, pushes are only accepted from a registered terminal's IP address.</span></label>
+      <label class="check full"><input type="checkbox" name="require_2fa_admins" {{ 'checked' if settings.require_2fa_admins == '1' }}> Require two-factor sign-in for all administrators</label>
       <div class="full"><button class="btn primary" type="submit">Save settings</button></div>
     </form>
   </div>
@@ -54,6 +55,7 @@
 {% endif %}
   <div class="card">
     <h2>Change your password</h2>
+    <p class="small"><a href="{{ url_for('twofactor.manage') }}">Two-factor sign-in</a>: {{ 'on' if user.totp_enabled else 'off' }} — adds a code from your phone after the password.</p>
     <form method="post" class="form-grid">
       {{ csrf() }}<input type="hidden" name="form" value="password">
       <label class="full">Current password<input type="password" name="current_password" required></label>
@@ -70,13 +72,16 @@
     The quickest way to give an employee a login is the <i>Self-service login</i> box on their employee page.</p>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Username</th><th>Role</th><th>Employee</th><th>Change role</th><th>Reset password</th><th></th></tr></thead>
+    <thead><tr><th>Username</th><th>Role</th><th>Employee</th><th>2FA</th><th>Change role</th><th>Reset password</th><th></th></tr></thead>
     <tbody>
     {% for u in users %}
       <tr>
         <td><b>{{ u.username }}</b>{% if u.id == user.id %} <span class="muted small">(you)</span>{% endif %}</td>
         <td><span class="badge">{{ roles[u.role] if u.role in roles else u.role }}</span></td>
         <td>{{ u.employee_name ~ ' #' ~ u.employee_no if u.employee_name else '' }}</td>
+        <td>{% if u.totp_enabled %}<span class="badge s-approved">On</span>
+          {% if u.id != user.id %}<form method="post" class="inline" data-confirm="Turn off two-factor sign-in for {{ u.username }}?">{{ csrf() }}<input type="hidden" name="form" value="reset_2fa"><input type="hidden" name="user_id" value="{{ u.id }}"><button class="btn sm">Turn off</button></form>{% endif %}
+          {% else %}<span class="muted small">Off</span>{% endif %}</td>
         <td>{% if u.role != 'employee' %}
           <form method="post" class="inline-form">{{ csrf() }}<input type="hidden" name="form" value="set_role"><input type="hidden" name="user_id" value="{{ u.id }}">
             <select name="role">{% for r in ('admin', 'viewer') %}<option value="{{ r }}" {{ 'selected' if u.role == r }}>{{ roles[r] }}</option>{% endfor %}</select>

@@ -38,8 +38,9 @@ def create_app(test_config=None):
     dbmod.init_db(app.config["DATABASE"], app.config["BACKUP_DIR"])
     app.teardown_appcontext(dbmod.close_db)
 
-    from . import bridge_api, portal, routes
+    from . import bridge_api, portal, routes, twofactor
     app.register_blueprint(routes.bp)
+    app.register_blueprint(twofactor.bp)
     app.register_blueprint(bridge_api.bp)
     app.register_blueprint(portal.bp)
 
@@ -52,10 +53,16 @@ def create_app(test_config=None):
     def load_user_and_check_csrf():
         g.user = None
         if "user_id" in session:
-            g.user = dbmod.get_db().execute("SELECT id, username, role, employee_id FROM users WHERE id = ?",
-                                            (session["user_id"],)).fetchone()
+            g.user = dbmod.get_db().execute("SELECT id, username, role, employee_id, totp_enabled, language "
+                                            "FROM users WHERE id = ?", (session["user_id"],)).fetchone()
             if g.user is None:
                 session.pop("user_id", None)  # the account was deleted
+        # Admins may be required to set up two-factor sign-in before anything else.
+        if g.user is not None and request.endpoint not in ("twofactor.manage", "main.logout", "static"):
+            from .twofactor import setup_required
+            if setup_required(g.user):
+                flash("Administrators must turn on two-factor sign-in before continuing.", "warning")
+                return redirect(url_for("twofactor.manage"))
         # Employee logins may only use their own self-service pages.
         if g.user is not None and g.user["role"] == "employee" and request.endpoint not in EMPLOYEE_ENDPOINTS:
             if request.method == "POST":
@@ -87,6 +94,7 @@ EMPLOYEE_ENDPOINTS = {
     "static", "main.login", "main.logout", "main.settings",
     "portal.my_attendance", "portal.my_leave", "portal.my_leave_cancel",
     "portal.my_corrections", "portal.my_correction_cancel",
+    "twofactor.manage", "twofactor.login_code",
 }
 
 
