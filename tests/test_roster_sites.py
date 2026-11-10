@@ -138,3 +138,20 @@ def test_office_token_management(logged_in, conn):
     assert conn.execute("SELECT bridge_token FROM sites").fetchone()[0] is None
     logged_in.post("/sites/1/delete", data={"csrf_token": t})
     assert conn.execute("SELECT COUNT(*) FROM sites").fetchone()[0] == 0
+
+
+def test_leave_balance_follows_the_roster(conn, setup):
+    from app import leave as lv
+    conn.execute("INSERT INTO roster VALUES (1, '2026-11-10', NULL)")  # Tue rest day: no leave needed
+    conn.execute("INSERT INTO roster VALUES (1, '2026-11-15', 1)")     # Sun rostered to work: leave needed
+    conn.execute("INSERT INTO leaves (employee_id, start_date, end_date, leave_type) VALUES (1, '2026-11-09', '2026-11-15', 'Casual')")
+    conn.commit()
+    assert lv.balances(conn, 2026, [1])[1]["Casual"]["used"] == 6  # 7 days - Tue rest + Sun worked - 0
+    assert lv.request_days(conn, 1, date(2026, 11, 10), date(2026, 11, 10), 0) == {2026: 0}
+
+
+def test_rotation_ignores_unknown_employees(logged_in, conn, setup):
+    resp = logged_in.post("/roster/rotate", data={"start": "2026-11-09", "weeks": "1", "pattern": ["1"],
+                                                  "employee_id": ["1", "999"], "csrf_token": logged_in.csrf})
+    assert resp.status_code == 302
+    assert {r[0] for r in conn.execute("SELECT DISTINCT employee_id FROM roster")} == {1}

@@ -12,13 +12,31 @@ def leave_types(db):
     return db.execute("SELECT * FROM leave_types ORDER BY name").fetchall()
 
 
-def working_days(start, end, weekly_off, holidays):
-    """Leave days in [start, end] excluding weekly offs and holidays."""
+def working_days(start, end, weekly_off, holidays, roster=None):
+    """Leave days in [start, end] excluding weekly offs, holidays and rostered rest days.
+
+    ``roster`` maps 'YYYY-MM-DD' -> shift id (working) or None (rest day) and
+    overrides the shift's weekly offs for those dates.
+    """
     offs = {int(w) for w in (weekly_off or "").split(",") if w.strip().isdigit()}
-    return sum(1 for d in daterange(start, end) if d.weekday() not in offs and d.isoformat() not in holidays)
+    roster = roster or {}
+    count = 0
+    for d in daterange(start, end):
+        iso = d.isoformat()
+        if iso in holidays:
+            continue
+        working = roster[iso] is not None if iso in roster else d.weekday() not in offs
+        count += working
+    return count
 
 
-def days_of(leave, weekly_off, holidays, year=None):
+def _roster(db, employee_id, start, end):
+    return {r["date"]: r["shift_id"] for r in db.execute(
+        "SELECT date, shift_id FROM roster WHERE employee_id = ? AND date BETWEEN ? AND ?",
+        (employee_id, str(start), str(end)))}
+
+
+def days_of(leave, weekly_off, holidays, year=None, roster=None):
     """How many leave days a leave entry uses (optionally only inside one year)."""
     start, end = parse_date(leave["start_date"]), parse_date(leave["end_date"])
     if not start or not end:
@@ -27,7 +45,7 @@ def days_of(leave, weekly_off, holidays, year=None):
         start, end = max(start, date(year, 1, 1)), min(end, date(year, 12, 31))
         if end < start:
             return 0
-    n = working_days(start, end, weekly_off, holidays)
+    n = working_days(start, end, weekly_off, holidays, roster)
     return n * 0.5 if leave["half_day"] else n
 
 
@@ -47,7 +65,8 @@ def balances(db, year, employee_ids=None):
     used = {}
     for lv in db.execute(sql, args):
         key = (lv["employee_id"], lv["leave_type"], lv["status"])
-        used[key] = used.get(key, 0) + days_of(lv, lv["weekly_off"], holidays, year)
+        roster = _roster(db, lv["employee_id"], lv["start_date"], lv["end_date"])
+        used[key] = used.get(key, 0) + days_of(lv, lv["weekly_off"], holidays, year, roster)
     ids = employee_ids if employee_ids is not None else [r[0] for r in db.execute("SELECT id FROM employees")]
     out = {}
     for emp_id in ids:
@@ -70,7 +89,7 @@ def request_days(db, employee_id, start, end, half_day):
     per_year = {}
     for year in range(start.year, end.year + 1):
         s, e = max(start, date(year, 1, 1)), min(end, date(year, 12, 31))
-        n = working_days(s, e, emp["weekly_off"] if emp else "", holidays)
+        n = working_days(s, e, emp["weekly_off"] if emp else "", holidays, _roster(db, employee_id, s, e))
         per_year[year] = n * 0.5 if half_day else n
     return per_year
 

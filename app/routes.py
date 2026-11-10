@@ -1322,6 +1322,8 @@ def roster_rotate():
     pattern = [_int(x) for x in request.form.getlist("pattern") if x]
     pattern = [p for p in pattern if p and db.execute("SELECT 1 FROM shifts WHERE id = ?", (p,)).fetchone()]
     ids = [int(x) for x in request.form.getlist("employee_id") if x.isdigit()]
+    existing = {r[0] for r in db.execute("SELECT id FROM employees")}
+    ids = [i for i in ids if i in existing]
     stagger = bool(request.form.get("stagger"))
     if not pattern or not ids:
         flash("Pick at least one employee and one shift for the rotation.", "error")
