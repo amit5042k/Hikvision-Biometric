@@ -115,11 +115,9 @@ def login_code():
             flash(f"Recovery code used - {remaining_codes(db.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone())} left. "
                   "Create new ones under Two-factor sign-in if you are running low.", "warning")
         if ok:
-            nxt, token = session.get("2fa_next"), session.get("csrf_token")
-            session.clear()
-            session["user_id"] = user["id"]
-            if token:
-                session["csrf_token"] = token
+            from .routes import start_session
+            nxt, keep = session.get("2fa_next"), session.get("2fa_keep")
+            start_session(user, keep)
             db.execute("DELETE FROM login_attempts WHERE username = ?", (user["username"],))
             dbmod.audit(db, user["username"], "login", f"{request.remote_addr or ''} (two-factor)")
             db.commit()
@@ -156,11 +154,12 @@ def manage():
                 session.pop("2fa_pending_secret", None)
                 flash("Two-factor sign-in is on. Save the recovery codes below somewhere safe.", "success")
                 user = db.execute("SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
-                return render_template("twofactor.html", user_row=user, codes=codes, remaining=remaining_codes(user))
+                return render_template("twofactor.html", user_row=user, codes=codes, remaining=remaining_codes(user),
+                                       required=_required(user))
         elif action in ("disable", "new_codes") and user["totp_enabled"]:
             if not check_password_hash(user["password_hash"], request.form.get("password", "")):
                 flash("Your password is not right.", "error")
-            elif verify(user["totp_secret"], request.form.get("code"), user["totp_last_step"]) is None:
+            elif (step := verify(user["totp_secret"], request.form.get("code"), user["totp_last_step"])) is None:
                 flash("That code is not right.", "error")
             elif action == "disable":
                 if _required(user):
@@ -173,11 +172,13 @@ def manage():
                     flash("Two-factor sign-in is off.", "success")
             else:
                 codes, hashes = new_recovery_codes()
-                db.execute("UPDATE users SET recovery_codes = ? WHERE id = ?", (hashes, user["id"]))
+                db.execute("UPDATE users SET recovery_codes = ?, totp_last_step = ? WHERE id = ?",
+                           (hashes, step, user["id"]))  # the code just used cannot be used again
                 dbmod.audit(db, user["username"], "user.2fa_codes", "new recovery codes")
                 db.commit()
                 user = db.execute("SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
-                return render_template("twofactor.html", user_row=user, codes=codes, remaining=remaining_codes(user))
+                return render_template("twofactor.html", user_row=user, codes=codes, remaining=remaining_codes(user),
+                                       required=_required(user))
         return redirect(url_for("twofactor.manage"))
     pending = session.get("2fa_pending_secret") if not user["totp_enabled"] else None
     issuer = dbmod.get_setting(db, "company_name") or "Attendance"

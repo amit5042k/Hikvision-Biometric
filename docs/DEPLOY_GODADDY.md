@@ -161,7 +161,9 @@ Then open `https://attendance.yourcompany.com`. The login page should appear.
 
 1. Sign in with **admin / admin**.
 2. **Settings → Change your password** immediately.
-3. **Settings → General**: set the company name.
+3. **Settings → General**: set the company name, and check **Time zone**.
+   - The default is `Asia/Kolkata`. GoDaddy servers run on UTC or US time, and this setting makes "today" and all timestamps follow your local time.
+   - The current local time is shown next to the field; make sure it matches your clock.
 4. **Settings → Bridge agent**: you need the **server_url** and **token** shown here in step C.
 
 ### A9. Nightly backup (recommended)

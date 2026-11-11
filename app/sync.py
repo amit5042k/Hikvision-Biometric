@@ -83,7 +83,7 @@ def sync_events(db, device, start=None, end=None, client=None):
     already stored for this device (duplicates are ignored by the UNIQUE key).
     """
     client = client or client_for(device)
-    default_start, default_end = actions.event_window(device, dbmod.get_setting(db, "initial_sync_days"))
+    default_start, default_end = actions.event_window(device, dbmod.int_setting(db, "initial_sync_days", 30))
     try:
         events = actions.fetch_events(client, start or default_start, end or default_end, minors(db))
     except HikvisionError as exc:
@@ -236,7 +236,7 @@ class SyncScheduler(threading.Thread):
             try:
                 conn = dbmod.connect(self.database)
                 try:
-                    interval = int(dbmod.get_setting(conn, "sync_interval_min") or 0)
+                    interval = dbmod.int_setting(conn, "sync_interval_min", 5)
                     if interval > 0:
                         for device in conn.execute("SELECT * FROM devices WHERE enabled = 1 "
                                                    "AND connection = 'direct'").fetchall():

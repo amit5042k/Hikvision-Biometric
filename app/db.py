@@ -1,7 +1,10 @@
+import os
 import secrets
 import sqlite3
+import time
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from flask import current_app, g
 from werkzeug.security import generate_password_hash
@@ -28,6 +31,7 @@ DEFAULT_SETTINGS = {
     "require_2fa_admins": "0",       # 1 = administrators must set up two-factor sign-in
     "default_language": "en",        # en | hi
     "android_assetlinks": "",        # Digital Asset Links JSON for a Google Play (TWA) build
+    "timezone": "Asia/Kolkata",      # the company's time zone; hosting servers usually run on UTC or US time
 }
 
 # Schema changes after the first release.
@@ -131,6 +135,29 @@ MIGRATIONS = [
 SCHEMA_VERSION = MIGRATIONS[-1][0] if MIGRATIONS else 1
 
 
+def valid_timezone(name):
+    try:
+        ZoneInfo(name)
+        return True
+    except Exception:
+        return False
+
+
+def apply_timezone(name):
+    """Make "now" and "today" mean the company's local time, not the hosting server's.
+
+    Python (datetime.now, date.today) and SQLite ('localtime') both follow the
+    process time zone, so one switch keeps the dashboard's "today", shift-end
+    checks, report times and stored timestamps consistent with the punch times
+    that come from the terminal.
+    """
+    if not name or os.environ.get("TZ") == name or not valid_timezone(name):
+        return
+    os.environ["TZ"] = name
+    if hasattr(time, "tzset"):  # not on Windows, where the PC clock is already local
+        time.tzset()
+
+
 def connect(path):
     conn = sqlite3.connect(path, detect_types=0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -231,6 +258,14 @@ def backup(path, backup_dir, keep=30):
 def get_setting(db, key):
     row = db.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
     return row["value"] if row and row["value"] is not None else DEFAULT_SETTINGS.get(key, "")
+
+
+def int_setting(db, key, default=0):
+    """A whole-number setting; tolerates values stored as '2.5' or garbage."""
+    try:
+        return int(float(get_setting(db, key)))
+    except (TypeError, ValueError):
+        return default
 
 
 def get_settings(db):

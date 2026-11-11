@@ -27,9 +27,15 @@ WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 def _int(value, default=None):
     try:
-        return int(value)
+        number = int(value)
     except (TypeError, ValueError):
         return default
+    return number if abs(number) < 2 ** 62 else default  # larger values do not fit a database integer
+
+
+def _ids(values):
+    """Database ids from a list of form values; anything else is dropped."""
+    return [n for n in (_int(v) for v in values) if n is not None and n > 0]
 
 
 def _float(value, default=None):
@@ -37,6 +43,11 @@ def _float(value, default=None):
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _year(value):
+    year = _int(value, date.today().year)
+    return year if 2000 <= year <= 2100 else date.today().year
 
 
 def _month_range(value):
@@ -88,22 +99,21 @@ def login():
             flash(f"Too many failed sign-in attempts. Try again in {LOCKOUT_MINUTES} minutes.", "error")
             return render_template("login.html"), 429
         user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
-        if user and check_password_hash(user["password_hash"], request.form.get("password", "")):
+        if user and check_password_hash(user["password_hash"], request.form.get("password", "")) \
+                and not _login_disabled(db, user):
+            keep = bool(request.form.get("keep"))
             if user["totp_enabled"]:  # password was right; now ask for the authenticator code
                 token = session.get("csrf_token")
                 session.clear()
-                session.update({"2fa_user": user["id"], "2fa_at": time.time(), "2fa_next": request.args.get("next")})
+                session.update({"2fa_user": user["id"], "2fa_at": time.time(), "2fa_next": request.args.get("next"),
+                                "2fa_keep": keep})
                 if token:
                     session["csrf_token"] = token
                 return redirect(url_for("twofactor.login_code"))
             db.execute("DELETE FROM login_attempts WHERE username = ?", (username,))
             dbmod.audit(db, username, "login", request.remote_addr or "")
             db.commit()
-            token = session.get("csrf_token")
-            session.clear()
-            session["user_id"] = user["id"]
-            if token:
-                session["csrf_token"] = token
+            start_session(user, keep)
             if request.form.get("password") == "admin" and user["username"] == "admin":
                 flash("You are using the default password. Please change it in Settings.", "warning")
             if user["role"] == "employee":
@@ -119,15 +129,46 @@ LOCKOUT_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
 
 
+def auth_stamp(user):
+    """Changes whenever the password changes; sessions carrying an old stamp are signed out."""
+    return user["password_hash"][-16:]
+
+
+def start_session(user, keep=False):
+    """Sign the user in on this browser (after the password and any two-factor step)."""
+    token = session.get("csrf_token")
+    session.clear()
+    session["user_id"] = user["id"]
+    session["auth"] = auth_stamp(user)
+    session.permanent = bool(keep)  # "keep me signed in": the cookie outlives the browser session
+    if token:
+        session["csrf_token"] = token
+
+
+def _login_disabled(db, user):
+    """A self-service login stops working once its employee is deactivated."""
+    if user["role"] != "employee":
+        return False
+    emp = db.execute("SELECT active FROM employees WHERE id = ?", (user["employee_id"],)).fetchone()
+    return emp is None or not emp["active"]
+
+
 def _too_many_attempts(db, username):
-    """Lock a username, and an IP address, after repeated failures."""
+    """Throttle password guessing.
+
+    Counted per (username, address) so that somebody else failing your login
+    does not lock you out, with higher overall limits per username and per
+    address as a backstop against guessing from many addresses or names.
+    """
     since = f"-{LOCKOUT_MINUTES} minutes"
+    ip = request.remote_addr
     db.execute("DELETE FROM login_attempts WHERE created_at < datetime('now', '-1 day')")
-    by_user = db.execute("SELECT COUNT(*) FROM login_attempts WHERE username = ? "
-                         "AND created_at >= datetime('now', ?)", (username, since)).fetchone()[0]
-    by_ip = db.execute("SELECT COUNT(*) FROM login_attempts WHERE ip = ? "
-                       "AND created_at >= datetime('now', ?)", (request.remote_addr, since)).fetchone()[0]
-    return by_user >= LOCKOUT_ATTEMPTS or by_ip >= LOCKOUT_ATTEMPTS * 4
+    count = lambda where, args: db.execute(
+        f"SELECT COUNT(*) FROM login_attempts WHERE {where} AND created_at >= datetime('now', ?)",
+        (*args, since)).fetchone()[0]
+    return (count("username = ? AND ip IS ?", (username, ip)) >= LOCKOUT_ATTEMPTS
+            or count("username = ?", (username,)) >= LOCKOUT_ATTEMPTS * 5
+            or count("ip IS ?", (ip,)) >= LOCKOUT_ATTEMPTS * 4)
 
 
 def _safe_next(target):
@@ -334,7 +375,7 @@ def employee_detail(emp_id):
 @bp.route("/employees/<int:emp_id>/push", methods=["POST"])
 @admin_required
 def employee_push(emp_id):
-    ids = [int(x) for x in request.form.getlist("device_id") if x.isdigit()]
+    ids = _ids(request.form.getlist("device_id"))
     flash(_push_to_devices(emp_id, ids or None), "info")
     return redirect(url_for("main.employee_detail", emp_id=emp_id))
 
@@ -748,6 +789,10 @@ def leaves():
             flash("Choose a leave type from the list.", "error")
         elif half_day and start != end:
             flash("A half-day leave must be for a single date.", "error")
+        elif db.execute("SELECT 1 FROM leaves WHERE employee_id = ? AND status IN ('pending', 'approved') "
+                        "AND start_date <= ? AND end_date >= ?",
+                        (emp_id, end.isoformat(), start.isoformat())).fetchone():
+            flash("This employee already has leave (approved or pending) on some of those dates.", "error")
         else:
             problem = lv.check_balance(db, emp_id, leave_type, start, end, half_day)
             db.execute("INSERT INTO leaves (employee_id, start_date, end_date, leave_type, half_day, reason, status, "
@@ -763,7 +808,7 @@ def leaves():
             else:
                 flash("Leave recorded.", "success")
         return redirect(url_for("main.leaves"))
-    year = _int(request.args.get("year"), date.today().year)
+    year = _year(request.args.get("year"))
     status = request.args.get("status", "")
     sql = ("SELECT l.*, e.name, e.employee_no FROM leaves l JOIN employees e ON e.id = l.employee_id "
            "WHERE l.start_date <= ? AND l.end_date >= ?")
@@ -925,7 +970,7 @@ def holidays():
             db.commit()
             flash("Holiday saved.", "success")
         return redirect(url_for("main.holidays"))
-    year = _int(request.args.get("year"), date.today().year)
+    year = _year(request.args.get("year"))
     rows = db.execute("SELECT * FROM holidays WHERE date LIKE ? ORDER BY date", (f"{year}-%",)).fetchall()
     return render_template("holidays.html", rows=rows, year=year)
 
@@ -1031,7 +1076,7 @@ def department_delete(did):
 @admin_required
 def bulk_shift():
     db = get_db()
-    ids = [int(x) for x in request.form.getlist("employee_id") if x.isdigit()]
+    ids = _ids(request.form.getlist("employee_id"))
     shift_id = _int(request.form.get("shift_id"))
     dept_id = _int(request.form.get("department_id"))
     site_id = _int(request.form.get("site_id"))
@@ -1101,9 +1146,11 @@ def settings():
             elif len(new) < 6 or new != request.form.get("confirm_password"):
                 flash("New password must be at least 6 characters and match the confirmation.", "error")
             else:
-                db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(new), user["id"]))
+                new_hash = generate_password_hash(new)
+                db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user["id"]))
                 _audit("user.password", "changed own password")
                 db.commit()
+                session["auth"] = new_hash[-16:]  # stay signed in here; other sessions are signed out
                 flash("Password changed.", "success")
         elif g.user["role"] != "admin":
             flash("Only administrators can change settings.", "error")
@@ -1113,6 +1160,8 @@ def settings():
                 value = _float(request.form.get(key))
                 if key in request.form and (value is None or not lo <= value <= hi):
                     errors.append(f"{label} must be a number from {lo:g} to {hi:g}.")
+            if "timezone" in request.form and not dbmod.valid_timezone(request.form["timezone"].strip()):
+                errors.append("Time zone must be a name like Asia/Kolkata.")
             minors = request.form.get("event_minors", "0").replace(" ", "")
             if not minors or not all(x.isdigit() for x in minors.split(",")):
                 errors.append("Event minor codes must be numbers separated by commas, e.g. 75,1,38 (or 0).")
@@ -1121,11 +1170,12 @@ def settings():
                     flash(e, "error")
             else:
                 for key in ("company_name", "sync_interval_min", "initial_sync_days", "event_minors",
-                            "window_before_hours", "ot_min_minutes", "push_token"):
+                            "window_before_hours", "ot_min_minutes", "push_token", "timezone"):
                     if key in request.form:
                         value = request.form[key].strip()
                         if key in NUMERIC_SETTINGS:
-                            value = "%g" % float(value)
+                            # whole numbers, except the hours-before-shift window (may be 2.5)
+                            value = "%g" % (float(value) if key == "window_before_hours" else round(float(value)))
                         dbmod.set_setting(db, key, value)
                 dbmod.set_setting(db, "require_2fa_admins", "1" if request.form.get("require_2fa_admins") else "0")
                 if request.form.get("default_language") in ("en", "hi"):
@@ -1185,7 +1235,10 @@ def settings():
                 if len(new) < 6:
                     flash("The new password must be at least 6 characters.", "error")
                 else:
-                    db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(new), uid))
+                    new_hash = generate_password_hash(new)
+                    db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, uid))
+                    if uid == g.user["id"]:
+                        session["auth"] = new_hash[-16:]  # resetting your own password keeps you signed in here
                     db.execute("DELETE FROM login_attempts WHERE username = ?", (target["username"],))
                     _audit("user.reset_password", target["username"])
                     db.commit()
@@ -1228,6 +1281,7 @@ def settings():
             flash("New bridge token created. Update bridge.ini on the bridge PC, then restart the bridge.", "warning")
         return redirect(url_for("main.settings"))
     return render_template("settings.html", settings=dbmod.get_settings(db), roles=ROLES,
+                           server_now=datetime.now().strftime("%d %b %Y %H:%M"),
                            schema_version=db.execute("PRAGMA user_version").fetchone()[0],
                            server_url=request.host_url.rstrip("/"),
                            users=db.execute("SELECT u.id, u.username, u.role, u.created_at, u.totp_enabled, "
@@ -1321,7 +1375,7 @@ def roster_rotate():
     weeks = max(1, min(_int(request.form.get("weeks"), 4), 26))
     pattern = [_int(x) for x in request.form.getlist("pattern") if x]
     pattern = [p for p in pattern if p and db.execute("SELECT 1 FROM shifts WHERE id = ?", (p,)).fetchone()]
-    ids = [int(x) for x in request.form.getlist("employee_id") if x.isdigit()]
+    ids = _ids(request.form.getlist("employee_id"))
     existing = {r[0] for r in db.execute("SELECT id FROM employees")}
     ids = [i for i in ids if i in existing]
     stagger = bool(request.form.get("stagger"))

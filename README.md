@@ -51,6 +51,8 @@ It pulls punches from the terminal over the LAN, applies shifts, holidays and le
 - **Users and security**:
   - Admin, viewer and employee roles; admins can reset passwords and change roles. The last admin cannot be removed.
   - Sign-in lockout after repeated failures, CSRF-protected forms.
+  - Changing or resetting a password signs out that account's other sessions. A deactivated employee's login stops working.
+- **Time zone**: the app runs on the company's time zone (Settings, default `Asia/Kolkata`), whatever clock the hosting server uses.
   - Responsive layout that works on phones.
 
 ## Quick start

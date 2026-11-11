@@ -18,6 +18,9 @@
       <label>{{ _("Minimum overtime (minutes)") }}<input type="number" min="0" name="ot_min_minutes" value="{{ settings.ot_min_minutes }}"></label>
       <label>{{ _("Push endpoint token") }}<input name="push_token" value="{{ settings.push_token }}" placeholder="{{ _("optional") }}">
         <span class="muted small" style="font-weight:400">{{ _("Recommended when hosted online. When set, device pushes must include ?token=…; when empty, pushes are only accepted from a registered terminal's IP address.") }}</span></label>
+      <label>{{ _("Time zone") }}<input name="timezone" value="{{ settings.timezone }}" list="tz-list" required>
+        <datalist id="tz-list">{% for z in ['Asia/Kolkata', 'Asia/Dubai', 'Asia/Kathmandu', 'Asia/Dhaka', 'Asia/Colombo', 'Asia/Singapore', 'Europe/London', 'UTC'] %}<option value="{{ z }}">{% endfor %}</datalist>
+        <span class="muted small" style="font-weight:400">{{ _("The company's local time. Now:") }} {{ server_now }}</span></label>
       <label>{{ _("Default interface language") }}<select name="default_language">{% for code, name in LANGUAGES.items() %}<option value="{{ code }}" {{ 'selected' if settings.default_language == code }}>{{ name }}</option>{% endfor %}</select></label>
       <label class="check full"><input type="checkbox" name="require_2fa_admins" {{ 'checked' if settings.require_2fa_admins == '1' }}> {{ _("Require two-factor sign-in for all administrators") }}</label>
       <div class="full"><button class="btn primary" type="submit">{{ _("Save settings") }}</button></div>

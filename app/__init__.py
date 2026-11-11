@@ -1,6 +1,6 @@
 import os
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
 
@@ -23,6 +23,7 @@ def create_app(test_config=None):
         BACKUP_DIR=os.path.join(data_dir, "backups"),
         MAX_CONTENT_LENGTH=4 * 1024 * 1024,
         MAX_FORM_PARTS=20000,  # the weekly roster grid posts one field per employee per day
+        PERMANENT_SESSION_LIFETIME=timedelta(days=30),  # "keep me signed in"
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=os.environ.get("HTTPS_ONLY", "").lower() in ("1", "true", "yes"),
@@ -37,6 +38,9 @@ def create_app(test_config=None):
 
     dbmod.init_db(app.config["DATABASE"], app.config["BACKUP_DIR"])
     app.teardown_appcontext(dbmod.close_db)
+    _conn = dbmod.connect(app.config["DATABASE"])
+    dbmod.apply_timezone(dbmod.get_setting(_conn, "timezone"))
+    _conn.close()
 
     from . import bridge_api, i18n, portal, pwa, routes, twofactor
     app.register_blueprint(routes.bp)
@@ -55,12 +59,19 @@ def create_app(test_config=None):
 
     @app.before_request
     def load_user_and_check_csrf():
+        dbmod.apply_timezone(dbmod.get_setting(dbmod.get_db(), "timezone"))  # follows a change in Settings
         g.user = None
         if "user_id" in session:
-            g.user = dbmod.get_db().execute("SELECT id, username, role, employee_id, totp_enabled, language "
-                                            "FROM users WHERE id = ?", (session["user_id"],)).fetchone()
-            if g.user is None:
-                session.pop("user_id", None)  # the account was deleted
+            g.user = dbmod.get_db().execute(
+                "SELECT u.id, u.username, u.role, u.employee_id, u.totp_enabled, u.language, u.password_hash, "
+                "e.active AS employee_active FROM users u LEFT JOIN employees e ON e.id = u.employee_id "
+                "WHERE u.id = ?", (session["user_id"],)).fetchone()
+            # Sign out when the account was deleted, its password was changed or reset
+            # elsewhere, or (self-service logins) the employee was deactivated.
+            if g.user is None or session.get("auth") != g.user["password_hash"][-16:] or \
+                    (g.user["role"] == "employee" and not g.user["employee_active"]):
+                g.user = None
+                session.pop("user_id", None)
         g.lang = i18n.current_language()
         # Admins may be required to set up two-factor sign-in before anything else.
         if g.user is not None and request.endpoint not in PUBLIC_ENDPOINTS | {"twofactor.manage", "main.logout"}:

@@ -88,8 +88,8 @@ def poll():
         "jobs": [{"id": j["id"], "device_id": j["device_id"], "action": j["action"],
                   "payload": json.loads(j["payload"] or "{}")} for j in jobs],
         "settings": {"event_minors": sync.minors(db),
-                     "initial_sync_days": int(settings.get("initial_sync_days") or 30),
-                     "sync_interval_min": int(settings.get("sync_interval_min") or 0)},
+                     "initial_sync_days": dbmod.int_setting(db, "initial_sync_days", 30),
+                     "sync_interval_min": dbmod.int_setting(db, "sync_interval_min", 5)},
     })
 
 

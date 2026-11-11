@@ -19,6 +19,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label class="form-grid"><span class="muted small"><b>{{ _("Username") }}</b></span><input name="username" autofocus required></label>
         <label class="form-grid"><span class="muted small"><b>{{ _("Password") }}</b></span><input name="password" type="password" required></label>
+        <label class="check" style="display:flex;align-items:center;gap:8px"><input type="checkbox" name="keep"> {{ _("Keep me signed in on this device") }}</label>
         <button class="btn primary" type="submit" style="justify-content:center">{{ _("Sign in") }}</button>
       </form>
     </div>

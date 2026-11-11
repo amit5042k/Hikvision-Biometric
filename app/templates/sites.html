@@ -11,7 +11,7 @@
     {% for s in rows %}
       <tr><td><b>{{ s.name }}</b></td><td class="wrap small">{{ s.address or '' }}</td>
         <td class="num"><a href="{{ url_for('main.employees', site=s.id) }}">{{ s.n_emp }}</a></td><td class="num">{{ s.n_dev }}</td>
-        <td class="wrap">{% if s.bridge_token %}<code>{{ s.bridge_token }}</code>{% else %}<span class="muted small">{{ _("uses the main token") }}</span>{% endif %}
+        <td class="wrap">{% if s.bridge_token %}{% if user.role == 'admin' %}<code>{{ s.bridge_token }}</code>{% else %}<span class="muted small">{{ _("set") }}</span>{% endif %}{% else %}<span class="muted small">{{ _("uses the main token") }}</span>{% endif %}
           {% if user.role == 'admin' %}<div class="actions" style="margin-top:4px">
             {{ post_button(url_for('main.site_token', sid=s.id), 'New token' if s.bridge_token else 'Create token', 'btn sm', 'The bridge in this office must then use the new token. Continue?' if s.bridge_token else None) }}
             {% if s.bridge_token %}<form method="post" action="{{ url_for('main.site_token', sid=s.id) }}" class="inline">{{ csrf() }}<input type="hidden" name="remove" value="1"><button class="btn sm" type="submit">{{ _("Remove") }}</button></form>{% endif %}
