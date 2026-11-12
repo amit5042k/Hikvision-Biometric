@@ -13,7 +13,7 @@ BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
 def _text(value):
     """Keep user text as text (no formulas)."""
-    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@"):
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@") and value != "-":
         return "'" + value
     return value
 

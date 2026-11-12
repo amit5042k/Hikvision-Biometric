@@ -101,7 +101,7 @@
   </div>
   <div class="meta">
     <p><b>Server:</b> Windows PC (school IT administrator) &nbsp;·&nbsp; <b>Clients:</b> IFP Classroom Android app on every classroom panel &nbsp;·&nbsp; <b>Viewing:</b> any browser on the school network</p>
-    <p>Software version: server with panel app 1.2. Screenshots use a fictional school ("Green Valley Public School") and sample names. Faces in camera images are blurred.</p>
+    <p>Software version: server with panel app 1.3. Screenshots use a fictional school ("Green Valley Public School") and sample names. Faces in camera images are blurred.</p>
     <p>Face recognition uses the open-source face-api library (MIT licence), included with the software, so recognition works without internet access.</p>
   </div>
 </section>
@@ -568,6 +568,7 @@ Data and backups are kept in: C:\IFPClassroom\data</div>
   <h2>17. Troubleshooting</h2>
   <table>
     <tr><th style="width:34%">Problem</th><th>What to check / do</th></tr>
+    <tr><td>Installer says "Python 3.10 or newer was not found"</td><td>Install Python from python.org with <b>Add Python to PATH</b> ticked. If it is installed, switch off the Store shortcuts: Windows Settings → Apps → Advanced app settings → App execution aliases → turn off <i>python.exe</i> and <i>python3.exe</i>. Run the installer again.</td></tr>
     <tr><td>Browser cannot open <code>http://&lt;PC-IP&gt;:8000</code></td><td>Is the server PC on? Does <code>http://localhost:8000</code> work on the PC itself? If yes, the firewall or network profile is blocking others (chapter 3). If no, look at <code>data\server.log</code> and run the installer again.</td></tr>
     <tr><td>Panel: "Cannot reach the server"</td><td>Is the address right (with <code>:8000</code>)? Is the panel on the school network rather than a guest Wi-Fi? Can the panel's browser open <code>http://&lt;PC-IP&gt;:8000/app</code>?</td></tr>
     <tr><td>Panel: "Wrong username or password"</td><td>Check the classroom login on the Classrooms page. Set a new password with <b class="ui">Update login</b> if needed.</td></tr>

@@ -2,6 +2,7 @@
 import csv
 import io
 import json
+import math
 import secrets
 import sqlite3
 from calendar import monthrange
@@ -36,7 +37,7 @@ def _int(value, default=None):
 
 
 def _cell(value):
-    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r") and value != "-":
         return "'" + value
     return value
 
@@ -191,8 +192,8 @@ def room_token(room_id):
     get_db().execute("UPDATE classrooms SET kiosk_token = ? WHERE id = ?", (secrets.token_urlsafe(18), room_id))
     _audit("classroom.new_link", room["name"])
     get_db().commit()
-    flash(f"New kiosk link created for {room['name']}. Update the link on that panel; the old one stops working.",
-          "warning")
+    flash(f"New kiosk link created for {room['name']}. That room's panel is signed out: sign it in again with the "
+          "classroom login.", "warning")
     return redirect(url_for("classroom.overview"))
 
 
@@ -240,6 +241,8 @@ def settings_save():
         threshold = float(request.form.get("class_match_threshold", "0.5"))
     except ValueError:
         threshold = 0.5
+    if not math.isfinite(threshold):
+        threshold = 0.5  # "nan"/"inf" would be stored and break every panel's roster
     threshold = min(max(threshold, 0.3), 0.7)
     detector = request.form.get("class_detector") if request.form.get("class_detector") in ("ssd", "tiny") else "ssd"
     offs = ",".join(str(d) for d in range(7) if request.form.get(f"off_{d}"))
@@ -444,27 +447,45 @@ def people_import():
     rooms = {r["name"].lower(): r["id"] for r in _rooms()}
     added = updated = 0
     errors = []
-    for i, row in enumerate(csv.DictReader(io.StringIO(text)), start=2):
-        row = {(k or "").strip().lower(): (v or "").strip() for k, v in row.items()}
+    reader = csv.DictReader(io.StringIO(text))
+    columns = {(c or "").strip().lower() for c in (reader.fieldnames or [])}
+    if not {"number", "name"} <= columns:
+        flash("The CSV needs at least the columns Number and Name (tip: export first to get a template).", "error")
+        return redirect(url_for("classroom.people"))
+    for i, row in enumerate(reader, start=2):
+        row = {(k or "").strip().lower(): (v or "").strip() for k, v in row.items() if isinstance(v, str) or v is None}
         number, name = row.get("number", ""), row.get("name", "")
         if not number or not name:
-            errors.append(f"line {i}: number and name are required")
+            if any(row.values()):
+                errors.append(f"line {i}: number and name are required")
             continue
-        role = row.get("role", "student").lower()
-        role = role if role in ROLES else "student"
-        room_name = row.get("classroom", "")
-        room_id = rooms.get(room_name.lower()) if room_name else None
-        if room_name and room_id is None:
-            errors.append(f"line {i}: unknown classroom '{room_name}' (add it on the Classroom page first)")
-        active = 0 if row.get("active", "1").lower() in ("0", "no", "n", "false", "inactive") else 1
-        existing = db.execute("SELECT id FROM class_persons WHERE person_no = ?", (number,)).fetchone()
+        existing = db.execute("SELECT * FROM class_persons WHERE person_no = ?", (number,)).fetchone()
+        # Columns missing from the file, or a classroom that does not exist, keep the person's current value.
+        role = row.get("role", "").lower() if "role" in columns else ""
+        if role not in ROLES:
+            role = existing["role"] if existing else "student"
+        class_name = row.get("class", "") if "class" in columns else (existing["class_name"] if existing else "")
+        room_id = existing["classroom_id"] if existing else None
+        if "classroom" in columns:
+            room_name = row.get("classroom", "")
+            if not room_name:
+                room_id = None
+            elif room_name.lower() in rooms:
+                room_id = rooms[room_name.lower()]
+            else:
+                errors.append(f"line {i}: unknown classroom '{room_name}' (add it on the Classrooms page first); "
+                              "home classroom left unchanged")
+        if "active" in columns:
+            active = 0 if row.get("active", "1").lower() in ("0", "no", "n", "false", "inactive") else 1
+        else:
+            active = existing["active"] if existing else 1
         if existing:
             db.execute("UPDATE class_persons SET name = ?, role = ?, class_name = ?, classroom_id = ?, active = ? "
-                       "WHERE id = ?", (name, role, row.get("class", ""), room_id, active, existing["id"]))
+                       "WHERE id = ?", (name, role, class_name, room_id, active, existing["id"]))
             updated += 1
         else:
             db.execute("INSERT INTO class_persons (person_no, name, role, class_name, classroom_id, active) "
-                       "VALUES (?, ?, ?, ?, ?, ?)", (number, name, role, row.get("class", ""), room_id, active))
+                       "VALUES (?, ?, ?, ?, ?, ?)", (number, name, role, class_name, room_id, active))
             added += 1
     _audit("person.import", f"{added} added, {updated} updated")
     db.commit()

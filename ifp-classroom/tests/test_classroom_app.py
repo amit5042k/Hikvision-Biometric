@@ -275,3 +275,47 @@ def test_panel_app_download_page_needs_no_login(client):
     assert "Download the app" in page and "ifp-classroom.apk" in page
     apk = client.get("/static/app/ifp-classroom.apk")
     assert apk.status_code == 200 and apk.data[:2] == b"PK"
+
+
+# ----------------------------------------------------------- bug fixes ---
+def test_partial_csv_reimport_keeps_other_fields(logged_in, school):
+    # a file with only Number and Name must not wipe role, class or home classroom
+    csv_text = "Number,Name\nS1,Asha Rao\nT1,Mrs Iyer-Rao\n"
+    logged_in.post("/classroom/people/import", data={"csrf_token": logged_in.csrf,
+                   "file": (io.BytesIO(csv_text.encode()), "names.csv")})
+    asha = school.execute("SELECT name, role, class_name, classroom_id FROM class_persons WHERE person_no = 'S1'").fetchone()
+    assert tuple(asha) == ("Asha Rao", "student", "8-A", 1)
+    assert school.execute("SELECT role FROM class_persons WHERE person_no = 'T1'").fetchone()[0] == "teacher"
+
+
+def test_csv_unknown_classroom_keeps_current_room(logged_in, school):
+    csv_text = "Number,Name,Classroom\nS1,Asha,Room Z\n"
+    page = logged_in.post("/classroom/people/import", data={"csrf_token": logged_in.csrf,
+                          "file": (io.BytesIO(csv_text.encode()), "x.csv")}, follow_redirects=True).get_data(as_text=True)
+    assert "left unchanged" in page
+    assert school.execute("SELECT classroom_id FROM class_persons WHERE person_no = 'S1'").fetchone()[0] == 1
+
+
+def test_csv_without_required_columns_is_rejected(logged_in, school):
+    page = logged_in.post("/classroom/people/import", data={"csrf_token": logged_in.csrf,
+                          "file": (io.BytesIO(b"Admission,Student\nS9,X\n"), "x.csv")},
+                          follow_redirects=True).get_data(as_text=True)
+    assert "at least the columns Number and Name" in page
+    assert school.execute("SELECT COUNT(*) FROM class_persons WHERE person_no = 'S9'").fetchone()[0] == 0
+
+
+def test_nan_threshold_cannot_break_panels(logged_in, client, school):
+    logged_in.post("/classroom/settings", data={"class_match_threshold": "nan", "class_detector": "ssd",
+                                                "csrf_token": logged_in.csrf})
+    assert school.execute("SELECT value FROM settings WHERE key = 'class_match_threshold'").fetchone()[0] == "0.50"
+    body = client.get("/api/class/tok8a/roster").get_data(as_text=True)
+    assert "NaN" not in body and json.loads(body)["threshold"] == 0.5
+
+
+def test_future_day_dash_is_plain_in_exports(logged_in, school):
+    from datetime import date as d
+    nxt = (d.today().replace(day=1) + timedelta(days=40)).strftime("%Y-%m")
+    out = logged_in.get(f"/classroom/monthly?month={nxt}&export=csv").get_data(as_text=True)
+    assert ",-," in out and "'-" not in out
+    wb = load_workbook(io.BytesIO(logged_in.get(f"/classroom/monthly?month={nxt}&export=xlsx").data))
+    assert wb.active.cell(row=4, column=4).value == "-"

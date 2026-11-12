@@ -58,7 +58,11 @@ public class KeepAliveService extends Service {
             ServiceCompat.startForeground(this, 1, n,
                     Build.VERSION.SDK_INT >= 30 ? ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA : 0);
         } catch (RuntimeException e) {
+            // Not allowed now (e.g. started while the app was in the background); the kiosk works anyway
+            // while it is on screen, and starts the service again when it is opened.
+            stopForeground(true);
             stopSelf();
+            return START_NOT_STICKY;
         }
         return START_STICKY;
     }

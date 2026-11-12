@@ -21,10 +21,13 @@ set "APPDIR=%~dp0.."
 cd /d "%APPDIR%"
 set "PORT=8000"
 
-where python >nul 2>&1
+REM "python" can be a Microsoft Store shortcut that only opens the Store, so check that it really runs
+python -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
 if errorlevel 1 (
-  echo Python was not found. Install Python 3.10 or newer from https://www.python.org/downloads/
-  echo and tick "Add Python to PATH" during installation. Then run this again.
+  echo Python 3.10 or newer was not found.
+  echo Install it from https://www.python.org/downloads/ and tick "Add Python to PATH" during installation.
+  echo If it is installed, turn off the Store shortcuts: Settings - Apps - Advanced app settings -
+  echo App execution aliases - switch off "python.exe" and "python3.exe". Then run this again.
   pause
   exit /b 1
 )

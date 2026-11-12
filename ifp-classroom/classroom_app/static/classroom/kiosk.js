@@ -277,7 +277,7 @@
 
   // --------------------------------------------------------------- send --
   async function flush() {
-    if (!state.queue.length) return;
+    if (!state.queue.length || state.signedOut) return;  // keep records until the panel is signed in again
     var batch = state.queue.slice(0, 1000);
     var now = Date.now();
     var body = { sightings: batch.map(function (s) {
@@ -285,6 +285,7 @@
     }) };
     try {
       var resp = await fetch(K.sightings, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (resp.status === 404) { state.signedOut = true; fetchRoster(); return; }
       if (!resp.ok) throw new Error('server returned ' + resp.status);
       state.queue.splice(0, batch.length);
       save('queue', state.queue);
