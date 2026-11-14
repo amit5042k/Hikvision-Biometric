@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block body %}
+<div class="card">
+  <h1>{{ title }}</h1>
+  <p>{{ message }}</p>
+  {% if owner_note %}<p class="muted">If this is your code: {{ contact_text }}</p>{% endif %}
+  <a class="btn primary" href="/">Make your own QR code</a>
+</div>
+{% endblock %}

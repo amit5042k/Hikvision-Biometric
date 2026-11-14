@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>{% block title %}QR Generator{% endblock %}</title>
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  <style>
+    :root { --bg:#f6f7fb; --panel:#fff; --text:#111827; --muted:#6b7280; --border:#e5e7eb; --accent:#4f46e5; --accent-text:#fff; --ok:#047857; --bad:#b91c1c; color-scheme: light dark; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#0f1117; --panel:#181b23; --text:#e5e7eb; --muted:#9ca3af; --border:#2a2f3a; --accent:#818cf8; --accent-text:#0f1117; --ok:#34d399; --bad:#f87171; } }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+    .wrap { max-width: {% block width %}520px{% endblock %}; margin: 0 auto; padding: 24px 16px; }
+    .card { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:20px; }
+    h1 { font-size:20px; margin:0 0 6px; }
+    .muted { color:var(--muted); font-size:13px; }
+    .btn { display:inline-block; font:inherit; text-decoration:none; text-align:center; cursor:pointer; border-radius:10px; padding:10px 14px; border:1px solid var(--border); background:transparent; color:var(--text); }
+    .btn.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-text); font-weight:600; }
+    .btn.small { padding:5px 9px; font-size:13px; }
+    input { font:inherit; color:var(--text); background:transparent; border:1px solid var(--border); border-radius:10px; padding:9px 11px; }
+    .stack { display:grid; gap:10px; }
+    .brand { display:flex; align-items:center; gap:8px; font-weight:700; margin-bottom:14px; color:var(--text); text-decoration:none; }
+    .flash { background:var(--panel); border:1px solid var(--accent); border-radius:10px; padding:10px 12px; margin-bottom:12px; }
+    pre { white-space:pre-wrap; word-break:break-word; font:inherit; margin:0; }
+    dl { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; margin:0; }
+    dt { color:var(--muted); } dd { margin:0; word-break:break-word; }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/icons/icon.svg" alt="" width="24" height="24"> QR Generator</a>
+    {% with msgs = get_flashed_messages() %}{% for m in msgs %}<div class="flash">{{ m }}</div>{% endfor %}{% endwith %}
+    {% block body %}{% endblock %}
+  </div>
+</body>
+</html>

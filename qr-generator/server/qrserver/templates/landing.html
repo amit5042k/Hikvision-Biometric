@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}{{ code.label }}{% endblock %}
+{% block body %}
+<div class="card stack">
+  <div class="muted">{{ type_name }}</div>
+  {% if code.type == 'text' %}
+    <pre id="content">{{ d.text }}</pre>
+    <button class="btn" type="button" data-copy="content">Copy text</button>
+
+  {% elif code.type == 'wifi' %}
+    <h1>Wi-Fi: {{ d.ssid }}</h1>
+    <dl>
+      <dt>Network</dt><dd id="ssid">{{ d.ssid }}</dd>
+      {% if d.security != 'nopass' %}<dt>Password</dt><dd id="pw">{{ d.wifiPassword }}</dd>{% endif %}
+      <dt>Security</dt><dd>{{ {'WPA': 'WPA/WPA2/WPA3', 'WEP': 'WEP', 'nopass': 'Open (no password)'}[d.security] }}</dd>
+    </dl>
+    {% if d.security != 'nopass' %}<button class="btn primary" type="button" data-copy="pw">Copy password</button>{% endif %}
+    <p class="muted">Open your phone's Wi-Fi settings, choose “{{ d.ssid }}” and paste the password.</p>
+
+  {% elif code.type == 'vcard' %}
+    <h1>{{ (d.firstName ~ ' ' ~ d.lastName).strip() or d.org }}</h1>
+    <dl>
+      {% if d.title or d.org %}<dt>Work</dt><dd>{{ d.title }}{% if d.title and d.org %}, {% endif %}{{ d.org }}</dd>{% endif %}
+      {% if d.vPhone %}<dt>Phone</dt><dd><a href="tel:{{ d.vPhone }}">{{ d.vPhone }}</a></dd>{% endif %}
+      {% if d.vEmail %}<dt>Email</dt><dd><a href="mailto:{{ d.vEmail }}">{{ d.vEmail }}</a></dd>{% endif %}
+      {% if d.vUrl %}<dt>Website</dt><dd>{{ d.vUrl }}</dd>{% endif %}
+      {% if d.address %}<dt>Address</dt><dd>{{ d.address }}</dd>{% endif %}
+    </dl>
+    <a class="btn primary" href="{{ url_for('public.scan_vcard', slug=code.slug) }}">Save contact</a>
+
+  {% elif code.type == 'email' %}
+    <h1>Email {{ d.emailTo }}</h1>
+    {% if d.emailSubject %}<div><span class="muted">Subject:</span> {{ d.emailSubject }}</div>{% endif %}
+    {% if d.emailBody %}<pre>{{ d.emailBody }}</pre>{% endif %}
+    <a class="btn primary" href="mailto:{{ d.emailTo }}?subject={{ d.emailSubject|urlencode }}&body={{ d.emailBody|urlencode }}">Write email</a>
+
+  {% elif code.type == 'sms' %}
+    <h1>Text {{ d.smsNumber }}</h1>
+    {% if d.smsBody %}<pre>{{ d.smsBody }}</pre>{% endif %}
+    <a class="btn primary" href="sms:{{ d.smsNumber }}?body={{ d.smsBody|urlencode }}">Send SMS</a>
+
+  {% elif code.type == 'phone' %}
+    <h1>Call {{ d.phone }}</h1>
+    <a class="btn primary" href="tel:{{ d.phone }}">Call now</a>
+  {% endif %}
+</div>
+<script>
+  document.querySelectorAll('[data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var text = document.getElementById(b.dataset.copy).textContent;
+      navigator.clipboard.writeText(text).then(function () { b.textContent = 'Copied'; });
+    });
+  });
+</script>
+{% endblock %}
